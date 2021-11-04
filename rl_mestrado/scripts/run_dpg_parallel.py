@@ -11,7 +11,8 @@ from rl_mestrado.tools.log import get_logger
 
 #=======================================================| VARIABLES
 
-DATA_PATH = os.path.join('silver', 'weekly_feature_set.csv')
+DATA_PATH = os.path.join('silver', 'daily_feature_set.csv')
+NAME_SUFFIX = "daily"
 ASSETS = ['SPY', 'TLT.O', 'XLK']
 MODEL_OUTPUT_PATH = os.path.join('results')
 BACKTEST_OUTPUT_PATH = os.path.join('results', 'backtest')
@@ -47,7 +48,7 @@ def run(**kwargs):
     assets=ASSETS,
     n_features=N_FEATURES,
     n_assets=len(ASSETS),
-    name_suffix=f"lr_{learning_rate}_epoch_{n_epochs}"
+    name_suffix=f"daily_lr_{learning_rate}_epoch_{n_epochs}"
 )
 
     model_path, train_df = agent.train(
@@ -109,11 +110,11 @@ results = Parallel(n_jobs=-2)(
 df_result_backtest, df_result_train = zip(*results)
 
 print("\n\nFINISHED PARALLEL EXECUTION\n")
-result_path = os.path.join(TRAIN_OUTPUT_PATH, dt.datetime.now().strftime("%Y_%m_%d__%H_%M_%S")+'_aggregated.csv')
+result_path = os.path.join(TRAIN_OUTPUT_PATH, dt.datetime.now().strftime("%Y_%m_%d__%H_%M_%S")+f'_aggregated_{NAME_SUFFIX}.csv')
 pd.concat(df_result_train, axis=1).to_csv(result_path, index=True)
 print(f"Train result saved at {result_path}")
 
-result_path = os.path.join(BACKTEST_OUTPUT_PATH, dt.datetime.now().strftime("%Y_%m_%d__%H_%M_%S")+'_aggregated.csv')
+result_path = os.path.join(BACKTEST_OUTPUT_PATH, dt.datetime.now().strftime("%Y_%m_%d__%H_%M_%S")+f'_aggregated_{NAME_SUFFIX}.csv')
 pd.concat(df_result_backtest, axis=1).to_csv(result_path, index=True)
 print(f"Backtest result saved at {result_path}")
 
