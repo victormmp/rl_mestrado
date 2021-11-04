@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "rl_mestrado"
+version = "0.1.0"
+description = ""
+authors = ["Victor Magalhaes <victormmp@outlook.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+numpy = "^1.21"
+pandas = "^1.3.4"
+matplotlib = "^3.4.3"
+jupyter = "^1.0.0"
+jupyterlab = "^3.2.1"
+ffn = "^0.3.6"
+bt = "^0.2.9"
+pyportfolioopt = "^1.5.1"
+tsmoothie = "^1.0.4"
+torch = "^1.10.0"
+tensorboard = "^2.7.0"
+joblib = "^1.1.0"
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.2"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
