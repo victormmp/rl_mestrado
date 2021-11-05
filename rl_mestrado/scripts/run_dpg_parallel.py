@@ -12,7 +12,7 @@ from rl_mestrado.tools.log import get_logger
 #=======================================================| VARIABLES
 
 DATA_PATH = os.path.join('silver', 'daily_feature_set.csv')
-NAME_SUFFIX = "daily"
+NAME_SUFFIX = "daily_v2"
 ASSETS = ['SPY', 'TLT.O', 'XLK']
 MODEL_OUTPUT_PATH = os.path.join('results')
 BACKTEST_OUTPUT_PATH = os.path.join('results', 'backtest')
