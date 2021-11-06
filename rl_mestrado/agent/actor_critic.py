@@ -85,7 +85,8 @@ class ActorCriticAgentLearner:
                 
                 # Calculate the reward from the previous state
                 next_state = torch.tensor(row.values).float()
-                reward = torch.dot(weights, torch.tensor(row[[c + '_logReturns' for c in self._assets]].values).float())
+                reward = torch.dot(weights, torch.tensor(np.exp(row[[c + '_logReturns' for c in self._assets]].values)).float())
+                reward = torch.log(reward)
                 
                 loss = - (reward + self._gamma * self._critic(next_state) - self._critic(previous_state))
                 
@@ -139,7 +140,9 @@ class ActorCriticAgentLearner:
         agent_state = torch.load(model_path)
 
         actor_state = agent_state.pop("_actor")
-        optimizer_state = agent_state.pop("_optimizer")
+        critic_state = agent_state.pop("_critic")
+        actor_optimizer_state = agent_state.pop("_actor_optimizer")
+        critic_optimizer_state = agent_state.pop("_critic_optimizer")
 
         # Filter parameters to not overwrite
         if exclude_params:
@@ -151,11 +154,15 @@ class ActorCriticAgentLearner:
 
         # Rebuilding models
         self._actor: nn.Module = SimpleNetwork(features=self._n_features, outputs=self._n_assets)
-        self._optimizer = Adam(self._actor.parameters(), lr=self._actor_lr)
+        self._critic: nn.Module = SimpleNetwork(features=self._n_features, outputs=self._n_assets)
+        self._actor_optimizer = Adam(self._actor.parameters(), lr=self._actor_lr)
+        self._critic_optimizer = Adam(self._actor.parameters(), lr=self._critic_lr)
 
         # Load model states
         self._actor.load_state_dict(actor_state)
-        self._optimizer.load_state_dict(optimizer_state)
+        self._critic.load_state_dict(critic_state)
+        self._actor_optimizer.load_state_dict(actor_optimizer_state)
+        self._critic_optimizer.load_state_dict(critic_optimizer_state)
 
         self._rng = default_rng(seed=self._seed)
 
@@ -172,7 +179,9 @@ class ActorCriticAgentLearner:
         agent_state.update(
              {
                 "_actor": self._actor.state_dict(),
-                "_optimizer": self._optimizer.state_dict(),
+                "_critic": self._critic.state_dict(),
+                "_actor_optimizer": self._actor_optimizer.state_dict(),
+                "_critic_optimizer": self._critic_optimizer.state_dict(),
                 "_rng": None
              }
         )

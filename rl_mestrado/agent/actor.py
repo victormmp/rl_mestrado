@@ -78,13 +78,13 @@ class DeepActorAgentLearner:
             for date, row in sample_data.iterrows():
                 
                 # Calculate the reward from the previous state
-                port_value += torch.dot(weights, torch.tensor(row[[c + '_logReturns' for c in self._assets]].values).float())
+                port_value += torch.log(torch.dot(weights, torch.tensor(np.exp(row[[c + '_logReturns' for c in self._assets]].values)).float()))
 
                 # Get the next action for this next state
                 state = torch.tensor(row.values).float()
                 weights = self._actor(state)
                 
-            loss =  - port_value / 100
+            loss =  - port_value / window_size # normalized by the length of the episode
             loss.backward()
             self._optimizer.step()
             

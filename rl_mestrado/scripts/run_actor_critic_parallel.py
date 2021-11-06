@@ -76,7 +76,7 @@ def run(**kwargs):
     df_out_sample.iloc[1:, :]
 
     for date, row in df_out_sample.iterrows():
-        port_value += np.dot(weights, row[[c + '_logReturns' for c in ASSETS]].values)
+        port_value += np.log(np.dot(weights, np.exp(row[[c + '_logReturns' for c in ASSETS]].values)))
         backtest_df.append((date, np.exp(port_value)))
 
         state = row.values

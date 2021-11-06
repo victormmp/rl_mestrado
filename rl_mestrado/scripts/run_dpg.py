@@ -59,7 +59,7 @@ state = fist_date.values
 weights = agent.act(state)
 
 for date, row in df_out_sample.iterrows():
-    port_value += np.dot(weights, row[[c + '_logReturns' for c in ASSETS]].values)
+    port_value += np.log(np.dot(weights, np.exp(row[[c + '_logReturns' for c in ASSETS]].values)))
     port_values.append((date, np.exp(port_value)))
 
     state = row.values
