@@ -16,6 +16,7 @@ NAME_SUFFIX = "daily_v2"
 ASSETS = ['SPY', 'TLT.O', 'XLK']
 MODEL_OUTPUT_PATH = os.path.join('results')
 BACKTEST_OUTPUT_PATH = os.path.join('results', 'backtest')
+WEIGHTS_OUTPUT_PATH = os.path.join('results', 'weights')
 TRAIN_OUTPUT_PATH = os.path.join('results', 'portfolio_values')
 START_OUT_SAMPLE = '2015-01-05'
 END_OUT_SAMPLE = '2021-09-30'
@@ -63,6 +64,7 @@ def run(**kwargs):
 
     port_value = 0.0
     backtest_df = []
+    weights_vec = []
 
     columns_to_drop = [c for c in df_out_sample.columns if 'TAIL' in c]
     df_out_sample = df_out_sample.drop(columns_to_drop, axis=1)
@@ -71,7 +73,7 @@ def run(**kwargs):
     state = first_date.values
     weights = agent.act(state)
 
-    df_out_sample.iloc[1:, :]
+    df_out_sample = df_out_sample.iloc[1:, :]
 
     for date, row in df_out_sample.iterrows():
 
@@ -82,11 +84,16 @@ def run(**kwargs):
 
         state = row.values
         weights = agent.act(state)
+        weights_vec.append((date, *list(weights)))
 
     backtest_df = pd.DataFrame(backtest_df, columns=['date', agent._agent_name]).set_index('date')
 
     backtest_result_path = os.path.join(BACKTEST_OUTPUT_PATH, agent._agent_name+'.csv')
     backtest_df.to_csv(backtest_result_path, index=True)
+
+    weights_df = pd.DataFrame(weights_vec, columns=['date']+ASSETS).set_index('date')
+    weights_result_path = os.path.join(WEIGHTS_OUTPUT_PATH, agent._agent_name+'.csv')
+    weights_df.to_csv(weights_result_path, index=True)
 
     print(f"Backtest result saved at {backtest_result_path}")
 

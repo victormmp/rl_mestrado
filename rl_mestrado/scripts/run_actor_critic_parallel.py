@@ -16,11 +16,12 @@ NAME_SUFFIX = "daily_v2"
 ASSETS = ['SPY', 'TLT.O', 'XLK']
 MODEL_OUTPUT_PATH = os.path.join('results')
 BACKTEST_OUTPUT_PATH = os.path.join('results', 'backtest')
+WEIGHTS_OUTPUT_PATH = os.path.join('results', 'weights')
 TRAIN_OUTPUT_PATH = os.path.join('results', 'portfolio_values')
 START_OUT_SAMPLE = '2015-01-05'
 END_OUT_SAMPLE = '2021-09-30'
 N_FEATURES = 14
-EPOCHS = 50000
+EPOCHS = 5000
 
 #=======================================================| TRAIN
 
@@ -38,11 +39,13 @@ df_out_sample = data.loc[start_out_samp:end_out_samp, :]
 
 def run(**kwargs):
 
+    index = kwargs.get('index')
     actor_lr = kwargs.get('learning_rate', 1e-3)
     critic_lr = actor_lr * 10
     n_epochs = kwargs.get('epochs', EPOCHS)
     df_in_sample = deepcopy(kwargs.get('df_in_sample'))
     df_out_sample = deepcopy(kwargs.get('df_out_sample'))
+    gamma = kwargs.get('gamma')
 
     agent  = ActorCriticAgentLearner(
     actor_lr=actor_lr,
@@ -50,8 +53,10 @@ def run(**kwargs):
     assets=ASSETS,
     n_features=N_FEATURES,
     n_assets=len(ASSETS),
-    name_suffix=f"daily_actor_lr_{actor_lr}_critic_lr_{critic_lr}_epoch_{n_epochs}"
-)
+    gamma=gamma,
+    steps_until_replay=0.01*n_epochs,
+    name_suffix=f"daily_actor_{index}_lr_{actor_lr}_critic_lr_{critic_lr}_epoch_{n_epochs}_gamma_{gamma}"
+    )
 
     model_path, train_df = agent.train(
         data=df_in_sample, 
@@ -65,6 +70,7 @@ def run(**kwargs):
 
     port_value = 0.0
     backtest_df = []
+    weights_vec = []
 
     columns_to_drop = [c for c in df_out_sample.columns if 'TAIL' in c]
     df_out_sample = df_out_sample.drop(columns_to_drop, axis=1)
@@ -73,7 +79,7 @@ def run(**kwargs):
     state = first_date.values
     weights = agent.act(state)
 
-    df_out_sample.iloc[1:, :]
+    df_out_sample = df_out_sample.iloc[1:, :]
 
     for date, row in df_out_sample.iterrows():
         port_value += np.log(np.dot(weights, np.exp(row[[c + '_logReturns' for c in ASSETS]].values)))
@@ -81,31 +87,62 @@ def run(**kwargs):
 
         state = row.values
         weights = agent.act(state)
+        weights_vec.append((date, *list(weights)))
 
     backtest_df = pd.DataFrame(backtest_df, columns=['date', agent._agent_name]).set_index('date')
 
     backtest_result_path = os.path.join(BACKTEST_OUTPUT_PATH, agent._agent_name+'.csv')
     backtest_df.to_csv(backtest_result_path, index=True)
 
+    weights_df = pd.DataFrame(weights_vec, columns=['date']+ASSETS).set_index('date')
+    weights_result_path = os.path.join(WEIGHTS_OUTPUT_PATH, agent._agent_name+'.csv')
+    weights_df.to_csv(weights_result_path, index=True)
+
     print(f"Backtest result saved at {backtest_result_path}")
 
     return backtest_df, train_df
 
+# configs = [
+#     (1e-4, 5000, df_in_sample, df_out_sample, 1.),
+#     (1e-4, 10000, df_in_sample, df_out_sample,  1.),
+#     (1e-4, 30000, df_in_sample, df_out_sample,  1.),
+#     (1e-4, 50000, df_in_sample, df_out_sample,  1.),
+# ]
+
+# configs = [
+#     (1e-6, EPOCHS, df_in_sample, df_out_sample, 1.0),
+#     (1e-5, EPOCHS, df_in_sample, df_out_sample, 1.0),
+#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0),
+#     (1e-3, EPOCHS, df_in_sample, df_out_sample, 1.0),
+# ]
+
+# configs = [
+#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 0.),
+#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 0.25),
+#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 0.5),
+#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 0.75),
+#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.),
+# ]
+
 configs = [
-    (1e-6, EPOCHS, df_in_sample, df_out_sample),
-    (1e-5, EPOCHS, df_in_sample, df_out_sample),
-    (1e-4, EPOCHS, df_in_sample, df_out_sample),
-    (1e-3, EPOCHS, df_in_sample, df_out_sample)
+    (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0),
+    (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0),
+    (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0),
+    (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0),
 ]
+
+
 
 results = Parallel(n_jobs=-2)(
     delayed(run)(
+            index=i,
             learning_rate=lr,
             epochs=e,
             df_in_sample=df_i,
-            df_out_sample=df_o
+            df_out_sample=df_o,
+            gamma=gamma
     )
-    for lr, e, df_i, df_o in configs
+    for i, (lr, e, df_i, df_o, gamma) in enumerate(configs)
 )
 
 df_result_backtest, df_result_train = zip(*results)

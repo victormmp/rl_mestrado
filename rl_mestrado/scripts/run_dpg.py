@@ -13,15 +13,16 @@ DATA_PATH = os.path.join('silver', 'weekly_feature_set.csv')
 ASSETS = ['SPY', 'TLT.O', 'XLK']
 MODEL_OUTPUT_PATH = os.path.join('results')
 BACKTEST_OUTPUT_PATH = os.path.join('results', 'backtest')
+WEIGHTS_OUTPUT_PATH = os.path.join('results', 'weights')
 START_OUT_SAMPLE = '2015-01-05'
 END_OUT_SAMPLE = '2021-09-30'
-N_FEATURES = 17
-EPOCHS = 30000
+N_FEATURES = 14
+EPOCHS = 50000
 
 #=======================================================| TRAIN
 
 data = pd.read_csv(DATA_PATH, parse_dates=True, index_col=0)
-data = data.loc[(~data['TLT.O'].isnull()) | (~data['TAIL.K'].isnull())]
+data = data.loc[(~data['TLT.O_logReturns'].isnull()) | (~data['TAIL.K_logReturns'].isnull())]
 data.fillna(0, inplace=True)
 
 start_out_samp = pd.Timestamp(START_OUT_SAMPLE)
@@ -31,7 +32,7 @@ df_in_sample = data.loc[:start_out_samp, :]
 df_out_sample = data.loc[start_out_samp:end_out_samp, :]
 
 agent  = DeepActorAgentLearner(
-    learning_rate=1e-3,
+    learning_rate=1e-4,
     assets=ASSETS,
     n_features=N_FEATURES,
     n_assets=len(ASSETS),
@@ -57,6 +58,9 @@ df_out_sample = df_out_sample.drop(columns_to_drop, axis=1)
 fist_date = df_out_sample.iloc[0, :]
 state = fist_date.values
 weights = agent.act(state)
+weights_vec = []
+
+df_out_sample = df_out_sample.iloc[1:, :]
 
 for date, row in df_out_sample.iterrows():
     port_value += np.log(np.dot(weights, np.exp(row[[c + '_logReturns' for c in ASSETS]].values)))
@@ -64,11 +68,16 @@ for date, row in df_out_sample.iterrows():
 
     state = row.values
     weights = agent.act(state)
+    weights_vec.append((date, *list(weights)))
 
 port_values = pd.DataFrame(port_values, columns=['date', 'model_1']).set_index('date')
 
 backtest_result_path = os.path.join(BACKTEST_OUTPUT_PATH, agent._agent_name+'.csv')
 port_values.to_csv(backtest_result_path, index=True)
+
+weights_df = pd.DataFrame(weights_vec, columns=['date']+ASSETS).set_index('date')
+weights_result_path = os.path.join(WEIGHTS_OUTPUT_PATH, agent._agent_name+'.csv')
+weights_df.to_csv(weights_result_path, index=True)
 
 print(f"Backtest result saved at {backtest_result_path}")
 

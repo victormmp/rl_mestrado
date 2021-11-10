@@ -7,7 +7,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 from numpy.random import default_rng
-from rl_mestrado.model.simple_network import SimpleNetwork
+from rl_mestrado.model.simple_network import SimpleNetworkActor
 from rl_mestrado.tools.log import get_logger
 from rl_mestrado.tools.path_tools import check_path
 from rl_mestrado.tools.stopwatch import StopWatch
@@ -40,7 +40,7 @@ class DeepActorAgentLearner:
 
         self._rng = default_rng(seed=self._seed)
 
-        self._actor = SimpleNetwork(features=n_features, outputs=n_assets)
+        self._actor = SimpleNetworkActor(features=n_features, outputs=n_assets)
         self._optimizer = Adam(self._actor.parameters(), lr=learning_rate)
     
     def train(self, data: pd.DataFrame, epochs: int = 1000, window_size: int = 100, result_output_path: str = '.'):
@@ -135,7 +135,7 @@ class DeepActorAgentLearner:
         self.__dict__.update(agent_state)
 
         # Rebuilding models
-        self._actor: nn.Module = SimpleNetwork(features=self._n_features, outputs=self._n_assets)
+        self._actor: nn.Module = SimpleNetworkActor(features=self._n_features, outputs=self._n_assets)
         self._optimizer = Adam(self._actor.parameters(), lr=self._learning_rate)
 
         # Load model states
