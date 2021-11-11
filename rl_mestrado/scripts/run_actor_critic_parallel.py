@@ -21,7 +21,7 @@ TRAIN_OUTPUT_PATH = os.path.join('results', 'portfolio_values')
 START_OUT_SAMPLE = '2015-01-05'
 END_OUT_SAMPLE = '2021-09-30'
 N_FEATURES = 14
-EPOCHS = 5000
+EPOCHS = 1000
 
 #=======================================================| TRAIN
 
@@ -46,16 +46,19 @@ def run(**kwargs):
     df_in_sample = deepcopy(kwargs.get('df_in_sample'))
     df_out_sample = deepcopy(kwargs.get('df_out_sample'))
     gamma = kwargs.get('gamma')
+    lmbda = kwargs.get('lmbda')
 
     agent  = ActorCriticAgentLearner(
-    actor_lr=actor_lr,
-    critic_lr=critic_lr,
-    assets=ASSETS,
-    n_features=N_FEATURES,
-    n_assets=len(ASSETS),
-    gamma=gamma,
-    steps_until_replay=0.01*n_epochs,
-    name_suffix=f"daily_actor_{index}_lr_{actor_lr}_critic_lr_{critic_lr}_epoch_{n_epochs}_gamma_{gamma}"
+        actor_lr=actor_lr,
+        critic_lr=critic_lr,
+        assets=ASSETS,
+        n_features=N_FEATURES,
+        n_assets=len(ASSETS),
+        gamma=gamma,
+        lmbda=lmbda,
+        steps_until_replay=0.01*n_epochs,
+        name_suffix=f"daily_{index}_lr_{actor_lr}_crit_lr_{critic_lr}_epoch_{n_epochs}_gamma_{gamma}_lmbda_{lmbda}",
+        replay=False
     )
 
     model_path, train_df = agent.train(
@@ -103,32 +106,40 @@ def run(**kwargs):
     return backtest_df, train_df
 
 # configs = [
-#     (1e-4, 5000, df_in_sample, df_out_sample, 1.),
-#     (1e-4, 10000, df_in_sample, df_out_sample,  1.),
-#     (1e-4, 30000, df_in_sample, df_out_sample,  1.),
-#     (1e-4, 50000, df_in_sample, df_out_sample,  1.),
+#     (1e-4, 5000, df_in_sample, df_out_sample, 1.  , 0.),
+#     (1e-4, 10000, df_in_sample, df_out_sample,  1., 0.),
+#     (1e-4, 30000, df_in_sample, df_out_sample,  1., 0.),
+#     (1e-4, 50000, df_in_sample, df_out_sample,  1., 0.),
 # ]
 
 # configs = [
-#     (1e-6, EPOCHS, df_in_sample, df_out_sample, 1.0),
-#     (1e-5, EPOCHS, df_in_sample, df_out_sample, 1.0),
-#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0),
-#     (1e-3, EPOCHS, df_in_sample, df_out_sample, 1.0),
+#     (1e-6, EPOCHS, df_in_sample, df_out_sample, 1.0, 0.),
+#     (1e-5, EPOCHS, df_in_sample, df_out_sample, 1.0, 0.),
+#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0, 0.),
+#     (1e-3, EPOCHS, df_in_sample, df_out_sample, 1.0, 0.),
 # ]
 
 # configs = [
-#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 0.),
-#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 0.25),
-#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 0.5),
-#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 0.75),
-#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.),
+#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 0.  , 0.),
+#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 0.25, 0.),
+#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 0.5 , 0.),
+#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 0.75, 0.),
+#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.  , 0.),
+# ]
+
+# configs = [
+#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0, 0.),
+#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0, 0.),
+#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0, 0.),
+#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0, 0.),
 # ]
 
 configs = [
-    (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0),
-    (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0),
-    (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0),
-    (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0),
+    (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0, 0.1),
+    (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0, 0.3),
+    (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0, 0.5),
+    (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0, 0.7),
+    (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0, 1.0),
 ]
 
 
@@ -140,9 +151,10 @@ results = Parallel(n_jobs=-2)(
             epochs=e,
             df_in_sample=df_i,
             df_out_sample=df_o,
-            gamma=gamma
+            gamma=gamma,
+            lmbda=lmbda
     )
-    for i, (lr, e, df_i, df_o, gamma) in enumerate(configs)
+    for i, (lr, e, df_i, df_o, gamma, lmbda) in enumerate(configs)
 )
 
 df_result_backtest, df_result_train = zip(*results)

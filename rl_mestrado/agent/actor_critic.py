@@ -22,7 +22,8 @@ class ActorCriticAgentLearner:
 
     def __init__(self, assets: str, n_features: int = 20, n_assets: int = 3, gamma: float = 1.,
         actor_lr: float = 1e-4, critic_lr: float = 1e-3, seed: int = None, name_suffix: str = "",
-        expr_buffer_size: int = 1000, steps_until_replay: int = 100, expr_replay_size: int = 100):
+        expr_buffer_size: int = 1000, steps_until_replay: int = 100, expr_replay_size: int = 100,
+        lmbda: float = 0.5, replay: bool = True):
         """Simple Actor Critic Algorithm for discrete action space with function approximation.
 
         Args:
@@ -43,6 +44,10 @@ class ActorCriticAgentLearner:
 
         self._gamma = gamma
 
+        # This parameter controlls the eligibility traces. Closer to 0 brings a behaviour closer to
+        # a TD(0) algorithm. Closer to 1 brings a behaviour closer to a Monte Carlo algorithm.
+        self._lambda = lmbda
+
         self._rng = default_rng(seed=self._seed)
 
         self._actor = SimpleNetworkActor(features=n_features, outputs=n_assets)
@@ -50,28 +55,35 @@ class ActorCriticAgentLearner:
         self._actor_optimizer = Adam(self._actor.parameters(), lr=actor_lr)
         self._critic_optimizer = Adam(self._critic.parameters(), lr=critic_lr)
 
+        self._replay = replay
         self._expr_buffer = []
         self._expr_buffer_size = expr_buffer_size
         self._steps_until_replay = steps_until_replay
         self._expr_replay_size = expr_replay_size
     
     def train(self, data: pd.DataFrame, epochs: int = 1000, window_size: int = 100, result_output_path: str = '.'):
+        
+        # Disable pytorch profiling tools to improve speed.
+        torch.autograd.set_detect_anomaly(False)
+        torch.autograd.profiler.profile(False)
+        torch.autograd.profiler.emit_nvtx(False)
 
         LOGGER.info(f"Starting training with {epochs} epochs and {self._actor_lr} learning rate.")
 
         data = deepcopy(data)
 
         self._actor.train()
+        self._critic.train()
         sw_total = StopWatch()
         last_log = sw_total.read()
 
-        # data = self.data.loc[(~self.data['TLT.O'].isnull()) | (~self.data['TAIL.K'].isnull())]
         columns_to_drop = [c for c in data.columns if 'TAIL' in c]
         data = data.drop(columns_to_drop, axis=1)
         
         valid_dates = list(data.index)
 
         values = []
+
         replay_steps_counter = 0
 
         actor_losses = []
@@ -100,10 +112,12 @@ class ActorCriticAgentLearner:
                 action = self._actor(previous_state)
 
             sample_data = sample_data.iloc[1:, :]
-            
-            torch.autograd.set_detect_anomaly(False)
-            torch.autograd.profiler.profile(False)
-            torch.autograd.profiler.emit_nvtx(False)
+
+            # Initialize Elegibility Trace
+            z = dict()
+            for name, param in self._critic.named_parameters():
+                if param.grad is not None:
+                    z[name] = param.grad
 
             for date, row in sample_data.iterrows():
             
@@ -138,25 +152,36 @@ class ActorCriticAgentLearner:
                 ## Calculate actor loss - variation 2
                 actor_loss = - self._critic(previous_state, self._actor(previous_state))
 
-                # Calculate critic loss
+                # Calculate critic loss with eligibility traces
                 critic_loss = - delta * self._critic(previous_state, action.detach().clone())
 
                 actor_loss.backward()
                 # Zero critic gradients to avoid backpropagation on critic from actor_loss
                 self._critic_optimizer.zero_grad()
+
+                # Run backward pass to calculate the current Q-function gradient relative to the
+                # model weights.
                 critic_loss.backward()
+
+                # Add eligibility traces to critic gradients
+                for name, param in self._critic.named_parameters():
+                    param.grad += - delta * self._gamma * self._lambda * z.get(name, 0)
+                
+                # Update Eligibility traces
+                for name, param in self._critic.named_parameters():
+                    if param.grad is not None:
+                        z[name] = param.grad
 
                 self._actor_optimizer.step()
                 self._critic_optimizer.step()
 
-                self._store_experience(previous_state, action, reward, next_state, next_action)
-
-                # Get the next action for this next state
-                action = next_action.detach().clone()
+                if self._replay:
+                    self._store_experience(previous_state, action, reward, next_state, next_action)
 
                 # Prepare for the next time step
                 port_value += reward
                 previous_state = next_state.detach().clone()
+                action = next_action.detach().clone()
 
                 ## This can be used instead of optimizer.zero_grad()
                 # for param in self._actor.parameters():
@@ -172,12 +197,12 @@ class ActorCriticAgentLearner:
                 delta_mean_loss += delta.item()
                 crit_mean_loss += - critic_loss.item()
             
-            if replay_steps_counter >= self._steps_until_replay:
+            if self._replay and (replay_steps_counter >= self._steps_until_replay):
                 replay_loss = self.replay()
                 if replay_loss:
                     expr_replay_losses.append((epoch, replay_loss))
                 replay_steps_counter = 0
-            else:
+            elif self._replay:
                 replay_steps_counter += 1
 
             actor_losses.append((epoch, act_mean_loss/window_size))
@@ -189,7 +214,8 @@ class ActorCriticAgentLearner:
                 LOGGER.info(f"[{epoch + 1} / {epochs}] Value = {round(np.exp(port_value.item()), 5)} {sw.read()}")
                 # LOGGER.info(f"[{epoch + 1} / {epochs}]     last weights = {list(action.numpy())}")
                 last_log = sw_total.read()
-
+        
+        # Save results
         model_output_path = os.path.join(result_output_path, 'models')
         model_path = self.save(output_path=model_output_path, model_name=self._agent_name)
 
@@ -204,7 +230,6 @@ class ActorCriticAgentLearner:
             pd.DataFrame(actor_losses, columns=['epoch', 'actor loss']).set_index('epoch'),
             pd.DataFrame(delta_losses, columns=['epoch', 'delta']).set_index('epoch'),
             pd.DataFrame(critic_losses, columns=['epoch', 'critic loss']).set_index('epoch'),
-            pd.DataFrame(expr_replay_losses, columns=['epoch', 'expr replay loss']).set_index('epoch')
         ], axis=1)
         losses_df.to_csv(losses_output_path, index=True)
 
