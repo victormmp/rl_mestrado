@@ -141,6 +141,12 @@ class ActorCriticAgentLearner:
                         - self._critic(previous_state, action)
                     )
 
+                # delta = (
+                #     reward.detach().clone()
+                #     + self._gamma * self._critic(next_state.clone(), next_action) 
+                #     - self._critic(previous_state.clone(), action)
+                # )
+
                 ## Calculate actor loss - variation 1
                 # action.requires_grad = True
                 # action_value = self._critic(previous_state, action)
@@ -154,6 +160,7 @@ class ActorCriticAgentLearner:
 
                 # Calculate critic loss with eligibility traces
                 critic_loss = - delta * self._critic(previous_state, action.detach().clone())
+                # critic_loss = delta ** 2
 
                 actor_loss.backward()
                 # Zero critic gradients to avoid backpropagation on critic from actor_loss

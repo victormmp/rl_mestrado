@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import torch
 from joblib import Parallel, delayed
-from rl_mestrado.agent.actor_critic import ActorCriticAgentLearner
+from rl_mestrado.agent.actor_cnn import DeepActorAgentLearner
 from rl_mestrado.tools.log import get_logger
 
 #=======================================================| VARIABLES
@@ -21,7 +21,8 @@ TRAIN_OUTPUT_PATH = os.path.join('results', 'portfolio_values')
 START_OUT_SAMPLE = '2015-01-05'
 END_OUT_SAMPLE = '2021-09-30'
 N_FEATURES = 14
-EPOCHS = 1000
+N_DAYS = 60
+EPOCHS = 10
 
 #=======================================================| TRAIN
 
@@ -39,60 +40,59 @@ df_out_sample = data.loc[start_out_samp:end_out_samp, :]
 
 def run(**kwargs):
 
-    index = kwargs.get('index')
-    actor_lr = kwargs.get('learning_rate', 1e-3)
-    critic_lr = actor_lr * 10
+    learning_rate = kwargs.get('learning_rate', 1e-3)
     n_epochs = kwargs.get('epochs', EPOCHS)
+    n_days = kwargs.get('n_days', N_DAYS)
     df_in_sample = deepcopy(kwargs.get('df_in_sample'))
     df_out_sample = deepcopy(kwargs.get('df_out_sample'))
-    gamma = kwargs.get('gamma')
-    lmbda = kwargs.get('lmbda')
 
-    agent  = ActorCriticAgentLearner(
-        actor_lr=actor_lr,
-        critic_lr=critic_lr,
+    agent  = DeepActorAgentLearner(
+        learning_rate=learning_rate,
         assets=ASSETS,
         n_features=N_FEATURES,
         n_assets=len(ASSETS),
-        gamma=gamma,
-        lmbda=lmbda,
-        steps_until_replay=0.01*n_epochs,
-        name_suffix=f"daily_{index}_lr_{actor_lr}_crit_lr_{critic_lr}_epoch_{n_epochs}_gamma_{gamma}_lmbda_{lmbda}",
-        replay=False
+        n_days=n_days,
+        name_suffix=f"daily_lr_{learning_rate}_epoch_{n_epochs}"
     )
+
 
     model_path, train_df = agent.train(
         data=df_in_sample, 
         epochs=n_epochs, 
-        result_output_path=MODEL_OUTPUT_PATH
+        result_output_path=MODEL_OUTPUT_PATH,
     )
 
     #=======================================================| BACKTEST
-    print('\n#====================| PERFORMING BACKTEST |')
+    print('\n\n\n#====================| PERFORMING BACKTEST |')
 
 
     port_value = 0.0
     backtest_df = []
-    weights_vec = []
 
     columns_to_drop = [c for c in df_out_sample.columns if 'TAIL' in c]
     df_out_sample = df_out_sample.drop(columns_to_drop, axis=1)
 
-    first_date = df_out_sample.iloc[0, :]
-    state = first_date.values
+    first_state = df_out_sample.iloc[0:N_DAYS, :]
+    state = first_state.values
     weights = agent.act(state)
+    weights_vec = []
 
     df_out_sample = df_out_sample.iloc[1:, :]
 
-    for date, row in df_out_sample.iterrows():
-        port_value += np.log(np.dot(weights, np.exp(row[[c + '_logReturns' for c in ASSETS]].values)))
+    for i in range(N_DAYS, df_out_sample.shape[0]):
+
+        date = pd.Timestamp(df_out_sample.iloc[i, :].name)
+        next_state = df_out_sample.iloc[i - N_DAYS : i,:]
+        next_assets_returns = next_state.iloc[-1,:][[c + '_logReturns' for c in ASSETS]].values
+
+        port_value += np.log(np.dot(weights, np.exp(next_assets_returns)))
         backtest_df.append((date, np.exp(port_value)))
 
-        state = row.values
+        state = next_state.values
         weights = agent.act(state)
         weights_vec.append((date, *list(weights)))
 
-    backtest_df = pd.DataFrame(backtest_df, columns=['date', agent._agent_name]).set_index('date')
+    backtest_df = pd.DataFrame(backtest_df, columns=['date', 'model_1']).set_index('date')
 
     backtest_result_path = os.path.join(BACKTEST_OUTPUT_PATH, agent._agent_name+'.csv')
     backtest_df.to_csv(backtest_result_path, index=True)
@@ -105,56 +105,22 @@ def run(**kwargs):
 
     return backtest_df, train_df
 
-# configs = [
-#     (1e-4, 5000, df_in_sample, df_out_sample, 1.  , 0.),
-#     (1e-4, 10000, df_in_sample, df_out_sample,  1., 0.),
-#     (1e-4, 30000, df_in_sample, df_out_sample,  1., 0.),
-#     (1e-4, 50000, df_in_sample, df_out_sample,  1., 0.),
-# ]
-
 configs = [
-    (1e-6, EPOCHS, df_in_sample, df_out_sample, 1.0, 0.),
-    (1e-5, EPOCHS, df_in_sample, df_out_sample, 1.0, 0.),
-    (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0, 0.),
-    (1e-3, EPOCHS, df_in_sample, df_out_sample, 1.0, 0.),
+    (1e-6, EPOCHS, df_in_sample, df_out_sample),
+    (1e-5, EPOCHS, df_in_sample, df_out_sample),
+    (1e-4, EPOCHS, df_in_sample, df_out_sample),
+    (1e-3, EPOCHS, df_in_sample, df_out_sample),
+    (1e-2, EPOCHS, df_in_sample, df_out_sample)
 ]
-
-# configs = [
-#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 0.  , 0.),
-#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 0.25, 0.),
-#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 0.5 , 0.),
-#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 0.75, 0.),
-#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.  , 0.),
-# ]
-
-# configs = [
-#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0, 0.),
-#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0, 0.),
-#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0, 0.),
-#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0, 0.),
-# ]
-
-# configs = [
-#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0, 0.1),
-#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0, 0.3),
-#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0, 0.5),
-#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0, 0.7),
-#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 1.0, 1.0),
-# ]
-
-
 
 results = Parallel(n_jobs=-2)(
     delayed(run)(
-            index=i,
             learning_rate=lr,
             epochs=e,
             df_in_sample=df_i,
-            df_out_sample=df_o,
-            gamma=gamma,
-            lmbda=lmbda
+            df_out_sample=df_o
     )
-    for i, (lr, e, df_i, df_o, gamma, lmbda) in enumerate(configs)
+    for lr, e, df_i, df_o in configs
 )
 
 df_result_backtest, df_result_train = zip(*results)
