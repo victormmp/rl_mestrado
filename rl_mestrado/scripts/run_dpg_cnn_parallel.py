@@ -12,7 +12,7 @@ from rl_mestrado.tools.log import get_logger
 #=======================================================| VARIABLES
 
 DATA_PATH = os.path.join('silver', 'daily_feature_set.csv')
-NAME_SUFFIX = "daily_v2"
+NAME_SUFFIX = "dpg_v2"
 ASSETS = ['SPY', 'TLT.O', 'XLK']
 MODEL_OUTPUT_PATH = os.path.join('results')
 BACKTEST_OUTPUT_PATH = os.path.join('results', 'backtest')
@@ -21,8 +21,8 @@ TRAIN_OUTPUT_PATH = os.path.join('results', 'portfolio_values')
 START_OUT_SAMPLE = '2015-01-05'
 END_OUT_SAMPLE = '2021-09-30'
 N_FEATURES = 14
-N_DAYS = 60
-EPOCHS = 10
+N_DAYS = 90
+EPOCHS = 10000
 
 #=======================================================| TRAIN
 
@@ -60,6 +60,7 @@ def run(**kwargs):
         data=df_in_sample, 
         epochs=n_epochs, 
         result_output_path=MODEL_OUTPUT_PATH,
+        window_size=180
     )
 
     #=======================================================| BACKTEST
@@ -92,7 +93,7 @@ def run(**kwargs):
         weights = agent.act(state)
         weights_vec.append((date, *list(weights)))
 
-    backtest_df = pd.DataFrame(backtest_df, columns=['date', 'model_1']).set_index('date')
+    backtest_df = pd.DataFrame(backtest_df, columns=['date', agent._agent_name]).set_index('date')
 
     backtest_result_path = os.path.join(BACKTEST_OUTPUT_PATH, agent._agent_name+'.csv')
     backtest_df.to_csv(backtest_result_path, index=True)

@@ -18,7 +18,7 @@ START_OUT_SAMPLE = '2015-01-05'
 END_OUT_SAMPLE = '2021-09-30'
 N_FEATURES = 14
 N_DAYS = 60
-EPOCHS = 10
+EPOCHS = 10000
 
 #=======================================================| TRAIN
 

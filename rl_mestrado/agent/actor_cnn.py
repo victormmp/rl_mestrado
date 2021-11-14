@@ -68,7 +68,7 @@ class DeepActorAgentLearner:
 
             start_index = self._rng.integers(
                 low=self._n_days - 1,
-                high=n_valid_dates
+                high=n_valid_dates - window_size
             )
 
             sample_data = data.iloc[start_index - self._n_days + 1: start_index + window_size]
@@ -93,10 +93,7 @@ class DeepActorAgentLearner:
                 weights = self._actor(state)
                 
             loss =  - port_value / window_size # normalized by the length of the episode
-            try:
-                loss.backward()
-            except Exception as e:
-                from IPython import embed; embed()
+            loss.backward()
             self._optimizer.step()
             
             values.append((epoch, np.exp(port_value.item())))
@@ -110,7 +107,7 @@ class DeepActorAgentLearner:
         values_output_path = os.path.join(result_output_path, 'portfolio_values', self._agent_name+'.csv')
         LOGGER.info(f"Saving portfolio values as {values_output_path}")
         result_df = pd.DataFrame(values,columns=['epoch', self._agent_name]).set_index('epoch')
-        result_df.to_csv(values_output_path, index=False)
+        result_df.to_csv(values_output_path, index=True)
 
         LOGGER.info(f"Finished training with {epochs} epochs in {sw_total.read()}.")
 
