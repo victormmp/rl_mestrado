@@ -15,7 +15,10 @@ class ConvolutionalActor(nn.Module):
         features, days = in_shape
         in_channels = 1
 
-        kernel_1 = (5, 1)
+        # kernel_1 = (5, 1)
+        # kernel_2 = (days - kernel_1[0] + 1, 1)
+
+        kernel_1 = (int(days/2), 1)
         kernel_2 = (days - kernel_1[0] + 1, 1)
 
         out_c_1 = 1

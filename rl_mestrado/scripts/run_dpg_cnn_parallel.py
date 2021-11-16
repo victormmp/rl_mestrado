@@ -12,7 +12,7 @@ from rl_mestrado.tools.log import get_logger
 #=======================================================| VARIABLES
 
 DATA_PATH = os.path.join('silver', 'daily_feature_set.csv')
-NAME_SUFFIX = "dpg_v2"
+NAME_SUFFIX = "dpg_daily_new_cnn"
 ASSETS = ['SPY', 'TLT.O', 'XLK']
 MODEL_OUTPUT_PATH = os.path.join('results')
 BACKTEST_OUTPUT_PATH = os.path.join('results', 'backtest')
@@ -21,7 +21,7 @@ TRAIN_OUTPUT_PATH = os.path.join('results', 'portfolio_values')
 START_OUT_SAMPLE = '2015-01-05'
 END_OUT_SAMPLE = '2021-09-30'
 N_FEATURES = 14
-N_DAYS = 90
+N_DAYS = 60
 EPOCHS = 10000
 
 #=======================================================| TRAIN
