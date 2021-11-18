@@ -6,13 +6,13 @@ import numpy as np
 import pandas as pd
 import torch
 from joblib import Parallel, delayed
-from rl_mestrado.agent.actor_cnn import DeepActorAgentLearner
+from rl_mestrado.agent.actor_cnn_sharpe import DeepActorAgentLearner
 from rl_mestrado.tools.log import get_logger
 
 #=======================================================| VARIABLES
 
 DATA_PATH = os.path.join('silver', 'daily_feature_set.csv')
-NAME_SUFFIX = "dpg_daily_new_cnn"
+NAME_SUFFIX = "dpg_daily_cnn_rf_epochs"
 ASSETS = ['SPY', 'TLT.O', 'XLK']
 MODEL_OUTPUT_PATH = os.path.join('results')
 BACKTEST_OUTPUT_PATH = os.path.join('results', 'backtest')
@@ -43,8 +43,11 @@ def run(**kwargs):
     learning_rate = kwargs.get('learning_rate', 1e-3)
     n_epochs = kwargs.get('epochs', EPOCHS)
     n_days = kwargs.get('n_days', N_DAYS)
+    metric = kwargs.get('metric', 'sharpe')
     df_in_sample = deepcopy(kwargs.get('df_in_sample'))
     df_out_sample = deepcopy(kwargs.get('df_out_sample'))
+
+    # df_in_sample['rf'] = df_in_sample['SPY_logReturns'].apply(np.exp)
 
     agent  = DeepActorAgentLearner(
         learning_rate=learning_rate,
@@ -52,7 +55,7 @@ def run(**kwargs):
         n_features=N_FEATURES,
         n_assets=len(ASSETS),
         n_days=n_days,
-        name_suffix=f"daily_lr_{learning_rate}_epoch_{n_epochs}"
+        name_suffix=f"daily_lr_{learning_rate}_epoch_{n_epochs}_metric_{metric}"
     )
 
 
@@ -60,7 +63,8 @@ def run(**kwargs):
         data=df_in_sample, 
         epochs=n_epochs, 
         result_output_path=MODEL_OUTPUT_PATH,
-        window_size=180
+        window_size=180,
+        metric=metric
     )
 
     #=======================================================| BACKTEST
@@ -106,22 +110,33 @@ def run(**kwargs):
 
     return backtest_df, train_df
 
+# configs = [
+#     (1e-3, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
+#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
+#     (1e-5, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
+#     (1e-3, EPOCHS, df_in_sample, df_out_sample, 'sortino'),
+#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sortino'),
+#     (1e-5, EPOCHS, df_in_sample, df_out_sample, 'sortino')
+# ]
+
 configs = [
-    (1e-6, EPOCHS, df_in_sample, df_out_sample),
-    (1e-5, EPOCHS, df_in_sample, df_out_sample),
-    (1e-4, EPOCHS, df_in_sample, df_out_sample),
-    (1e-3, EPOCHS, df_in_sample, df_out_sample),
-    (1e-2, EPOCHS, df_in_sample, df_out_sample)
+    (1e-4, 10000, df_in_sample, df_out_sample, 'sharpe'),
+    (1e-4, 30000, df_in_sample, df_out_sample, 'sharpe'),
+    (1e-4, 50000, df_in_sample, df_out_sample, 'sharpe'),
+    (1e-4, 10000, df_in_sample, df_out_sample, 'sortino'),
+    (1e-4, 30000, df_in_sample, df_out_sample, 'sortino'),
+    (1e-4, 50000, df_in_sample, df_out_sample, 'sortino')
 ]
 
 results = Parallel(n_jobs=-2)(
     delayed(run)(
             learning_rate=lr,
             epochs=e,
+            metric=m,
             df_in_sample=df_i,
             df_out_sample=df_o
     )
-    for lr, e, df_i, df_o in configs
+    for lr, e, df_i, df_o, m in configs
 )
 
 df_result_backtest, df_result_train = zip(*results)
