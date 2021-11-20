@@ -12,7 +12,7 @@ from rl_mestrado.tools.log import get_logger
 #=======================================================| VARIABLES
 
 DATA_PATH = os.path.join('silver', 'daily_feature_set.csv')
-NAME_SUFFIX = "dpg_daily_cnn_rf_epochs"
+NAME_SUFFIX = "dpg_daily_cnn__SPY_rf_tendencia"
 ASSETS = ['SPY', 'TLT.O', 'XLK']
 MODEL_OUTPUT_PATH = os.path.join('results')
 BACKTEST_OUTPUT_PATH = os.path.join('results', 'backtest')
@@ -22,7 +22,8 @@ START_OUT_SAMPLE = '2015-01-05'
 END_OUT_SAMPLE = '2021-09-30'
 N_FEATURES = 14
 N_DAYS = 60
-EPOCHS = 10000
+EPOCHS = 30000
+TENDENCIA = True
 
 #=======================================================| TRAIN
 
@@ -37,6 +38,18 @@ end_out_samp = pd.Timestamp(END_OUT_SAMPLE)
 df_in_sample = data.loc[:start_out_samp, :]
 df_out_sample = data.loc[start_out_samp:end_out_samp, :]
 
+if TENDENCIA:
+    print("Using 66-days cumsum for assets")
+    df_in_sample.loc[:, 'SPY_tend'] = df_in_sample[['SPY_logReturns']].rolling(66, min_periods=1).mean().apply(np.exp)
+    df_in_sample.loc[:, 'XLK_tend'] = df_in_sample[['XLK_logReturns']].rolling(66, min_periods=1).mean().apply(np.exp)
+    df_in_sample.loc[:, 'TLT.O_tend'] = df_in_sample[['TLT.O_logReturns']].rolling(66, min_periods=1).mean().apply(np.exp)
+
+    df_out_sample.loc[:, 'SPY_tend'] = df_out_sample[['SPY_logReturns']].rolling(66, min_periods=1).mean().apply(np.exp)
+    df_out_sample.loc[:, 'XLK_tend'] = df_out_sample[['XLK_logReturns']].rolling(66, min_periods=1).mean().apply(np.exp)
+    df_out_sample.loc[:, 'TLT.O_tend'] = df_out_sample[['TLT.O_logReturns']].rolling(66, min_periods=1).mean().apply(np.exp)
+
+    N_FEATURES +=  3
+
 
 def run(**kwargs):
 
@@ -47,7 +60,7 @@ def run(**kwargs):
     df_in_sample = deepcopy(kwargs.get('df_in_sample'))
     df_out_sample = deepcopy(kwargs.get('df_out_sample'))
 
-    # df_in_sample['rf'] = df_in_sample['SPY_logReturns'].apply(np.exp)
+    df_in_sample['rf'] = df_in_sample['SPY_logReturns'].apply(np.exp)
 
     agent  = DeepActorAgentLearner(
         learning_rate=learning_rate,
@@ -64,7 +77,8 @@ def run(**kwargs):
         epochs=n_epochs, 
         result_output_path=MODEL_OUTPUT_PATH,
         window_size=180,
-        metric=metric
+        metric=metric,
+        risk_free_asset_col='rf'
     )
 
     #=======================================================| BACKTEST
@@ -110,23 +124,23 @@ def run(**kwargs):
 
     return backtest_df, train_df
 
-# configs = [
-#     (1e-3, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
-#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
-#     (1e-5, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
-#     (1e-3, EPOCHS, df_in_sample, df_out_sample, 'sortino'),
-#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sortino'),
-#     (1e-5, EPOCHS, df_in_sample, df_out_sample, 'sortino')
-# ]
-
 configs = [
-    (1e-4, 10000, df_in_sample, df_out_sample, 'sharpe'),
-    (1e-4, 30000, df_in_sample, df_out_sample, 'sharpe'),
-    (1e-4, 50000, df_in_sample, df_out_sample, 'sharpe'),
-    (1e-4, 10000, df_in_sample, df_out_sample, 'sortino'),
-    (1e-4, 30000, df_in_sample, df_out_sample, 'sortino'),
-    (1e-4, 50000, df_in_sample, df_out_sample, 'sortino')
+    (1e-3, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
+    (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
+    (1e-5, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
+    (1e-3, EPOCHS, df_in_sample, df_out_sample, 'sortino'),
+    (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sortino'),
+    (1e-5, EPOCHS, df_in_sample, df_out_sample, 'sortino')
 ]
+
+# configs = [
+#     (1e-4, 10000, df_in_sample, df_out_sample, 'sharpe'),
+#     (1e-4, 30000, df_in_sample, df_out_sample, 'sharpe'),
+#     (1e-4, 50000, df_in_sample, df_out_sample, 'sharpe'),
+#     (1e-4, 10000, df_in_sample, df_out_sample, 'sortino'),
+#     (1e-4, 30000, df_in_sample, df_out_sample, 'sortino'),
+#     (1e-4, 50000, df_in_sample, df_out_sample, 'sortino')
+# ]
 
 results = Parallel(n_jobs=-2)(
     delayed(run)(

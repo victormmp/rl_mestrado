@@ -106,7 +106,6 @@ class DeepActorAgentLearner:
                 state = torch.tensor(next_state.values).float()
                 weights = self._actor(state)
             
-            # Using sharp ratio as target
             port_values = torch.stack(port_values) - 1
 
             if metric.lower() == 'sharpe':
