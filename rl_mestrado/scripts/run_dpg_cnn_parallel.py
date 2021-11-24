@@ -40,13 +40,13 @@ df_out_sample = data.loc[start_out_samp:end_out_samp, :]
 
 if TENDENCIA:
     print("Using 66-days cumsum for assets")
-    df_in_sample.loc[:, 'SPY_tend'] = df_in_sample[['SPY_logReturns']].rolling(66, min_periods=1).mean().apply(np.exp)
-    df_in_sample.loc[:, 'XLK_tend'] = df_in_sample[['XLK_logReturns']].rolling(66, min_periods=1).mean().apply(np.exp)
-    df_in_sample.loc[:, 'TLT.O_tend'] = df_in_sample[['TLT.O_logReturns']].rolling(66, min_periods=1).mean().apply(np.exp)
+    df_in_sample.loc[:, 'SPY_tend'] = df_in_sample[['SPY_logReturns']].rolling(66, min_periods=1).mean().apply(lambda x: np.exp(x) - 1)
+    df_in_sample.loc[:, 'XLK_tend'] = df_in_sample[['XLK_logReturns']].rolling(66, min_periods=1).mean().apply(lambda x: np.exp(x) - 1)
+    df_in_sample.loc[:, 'TLT.O_tend'] = df_in_sample[['TLT.O_logReturns']].rolling(66, min_periods=1).mean().apply(lambda x: np.exp(x) - 1)
 
-    df_out_sample.loc[:, 'SPY_tend'] = df_out_sample[['SPY_logReturns']].rolling(66, min_periods=1).mean().apply(np.exp)
-    df_out_sample.loc[:, 'XLK_tend'] = df_out_sample[['XLK_logReturns']].rolling(66, min_periods=1).mean().apply(np.exp)
-    df_out_sample.loc[:, 'TLT.O_tend'] = df_out_sample[['TLT.O_logReturns']].rolling(66, min_periods=1).mean().apply(np.exp)
+    df_out_sample.loc[:, 'SPY_tend'] = df_out_sample[['SPY_logReturns']].rolling(66, min_periods=1).mean().apply(lambda x: np.exp(x) - 1)
+    df_out_sample.loc[:, 'XLK_tend'] = df_out_sample[['XLK_logReturns']].rolling(66, min_periods=1).mean().apply(lambda x: np.exp(x) - 1)
+    df_out_sample.loc[:, 'TLT.O_tend'] = df_out_sample[['TLT.O_logReturns']].rolling(66, min_periods=1).mean().apply(lambda x: np.exp(x) - 1)
 
     N_FEATURES +=  3
 

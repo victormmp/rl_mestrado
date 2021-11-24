@@ -1,0 +1,103 @@
+import torch
+import torch.nn as nn
+
+
+class ConvolutionalActor(nn.Module):
+
+    def __init__(
+        self,
+        in_shape: list = (17, 60),
+        n_aug_features: int = 12,
+        outputs: int = 3 
+    ):
+
+        super().__init__()
+
+        features, days = in_shape
+        in_channels = 1
+
+        # kernel_1 = (5, 1)
+        # kernel_2 = (days - kernel_1[0] + 1, 1)
+
+        kernel_1 = (int(days/2), 1)
+        kernel_2 = (days - kernel_1[0] + 1, 1)
+
+        out_c_1 = 1
+        out_c_2 = 1
+
+        in_linear_1 = (
+                (days - kernel_1[0] - kernel_2[0] + 2) 
+                * (features - kernel_1[1] - kernel_2[1] + 2)
+            ) * out_c_2
+
+        self.conv1      = nn.Conv2d(in_channels=in_channels, out_channels=out_c_1, kernel_size=kernel_1)
+        self.drop1      = nn.Dropout2d(p=0.5)
+        self.batch1     = nn.BatchNorm2d(num_features=self.conv1.out_channels)
+        self.relu1      = nn.LeakyReLU()
+        self.conv2      = nn.Conv2d(in_channels=self.conv1.out_channels, out_channels=out_c_2, kernel_size=kernel_2)
+        self.batch2     = nn.BatchNorm2d(num_features=self.conv2.out_channels)
+        self.drop2      = nn.Dropout2d(p=0.3)
+        self.relu2      = nn.LeakyReLU()
+        self.flat1      = nn.Flatten()
+        self.linear1    = nn.Linear(in_features=in_linear_1, out_features=64)
+        self.relu3      = nn.LeakyReLU()
+        self.linear2    = nn.Linear(in_features=self.linear1.out_features, out_features=32)
+        self.relu4      = nn.LeakyReLU()
+        self.output1    = nn.Linear(in_features=self.linear2.out_features, out_features=outputs)
+        self.softmax1   = nn.Softmax(dim=1)
+
+    def forward(self, x, augmented_data):
+        # Add batch and channel dimentions
+        x = torch.unsqueeze(x, dim=0)
+        x = torch.unsqueeze(x, dim=0)
+
+        # Add batch dimention
+        augmented_data = torch.unsqueeze(augmented_data, dim=0)
+
+        x = self.conv1(x)
+        # x = self.drop1(x)
+        x = self.batch1(x)
+        x = self.relu1(x)
+        x = self.conv2(x)
+        # x = self.drop2(x)
+        x = self.batch2(x)
+        x = self.relu2(x)
+        x = self.flat1(x)
+        x = torch.cat([x, augmented_data], dim=1)
+        x = self.linear1(x)
+        x = self.relu3(x)
+        x = self.linear2(x)
+        x = self.relu4(x)
+        x = self.output1(x)
+        x = self.softmax1(x)
+
+        return torch.squeeze(x)
+
+
+class SimpleNetworkCritic(nn.Module):
+
+    def __init__(
+        self,
+        features: int = 64,
+        outputs: int = 3 
+    ):
+
+        super().__init__()
+
+        self.linear1    = nn.Linear(in_features=features, out_features=64)
+        self.relu1      = nn.ReLU()
+        self.linear2    = nn.Linear(in_features=64, out_features=32)
+        self.relu2      = nn.ReLU()
+        self.output1    = nn.Linear(in_features=32, out_features=outputs)
+
+
+    def forward(self, state, action):
+        dim = len(state.shape) - 1
+        x = torch.cat([state, action], dim=dim)
+        x = self.linear1(x)
+        x = self.relu1(x)
+        x = self.linear2(x)
+        x = self.relu2(x)
+        x = self.output1(x)
+
+        return x
