@@ -12,7 +12,7 @@ from rl_mestrado.tools.log import get_logger
 #=======================================================| VARIABLES
 
 DATA_PATH = os.path.join('silver', 'daily_feature_set.csv')
-NAME_SUFFIX = "dpg_daily_cnn__SPY_rf_tendencia"
+NAME_SUFFIX = "dpg_daily_cnn_v2"
 ASSETS = ['SPY', 'TLT.O', 'XLK']
 MODEL_OUTPUT_PATH = os.path.join('results')
 BACKTEST_OUTPUT_PATH = os.path.join('results', 'backtest')
@@ -92,8 +92,10 @@ def run(**kwargs):
     df_out_sample = df_out_sample.drop(columns_to_drop, axis=1)
 
     first_state = df_out_sample.iloc[0:N_DAYS, :]
-    state = first_state.values
-    weights = agent.act(state)
+    df_assets, df_aug = agent.get_state(first_state)
+    state = df_assets.values
+    aug = df_aug.values
+    weights = agent.act(state, aug)
     weights_vec = []
 
     df_out_sample = df_out_sample.iloc[1:, :]
@@ -101,14 +103,17 @@ def run(**kwargs):
     for i in range(N_DAYS, df_out_sample.shape[0]):
 
         date = pd.Timestamp(df_out_sample.iloc[i, :].name)
-        next_state = df_out_sample.iloc[i - N_DAYS : i,:]
+
+        df_next_state = df_out_sample.iloc[i - N_DAYS : i,:]
+        next_state, df_aug = agent.get_state(df_next_state)
         next_assets_returns = next_state.iloc[-1,:][[c + '_logReturns' for c in ASSETS]].values
 
         port_value += np.log(np.dot(weights, np.exp(next_assets_returns)))
         backtest_df.append((date, np.exp(port_value)))
 
         state = next_state.values
-        weights = agent.act(state)
+        aug = df_aug.values
+        weights = agent.act(state, aug)
         weights_vec.append((date, *list(weights)))
 
     backtest_df = pd.DataFrame(backtest_df, columns=['date', agent._agent_name]).set_index('date')
@@ -124,23 +129,23 @@ def run(**kwargs):
 
     return backtest_df, train_df
 
-configs = [
-    (1e-3, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
-    (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
-    (1e-5, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
-    (1e-3, EPOCHS, df_in_sample, df_out_sample, 'sortino'),
-    (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sortino'),
-    (1e-5, EPOCHS, df_in_sample, df_out_sample, 'sortino')
-]
-
 # configs = [
-#     (1e-4, 10000, df_in_sample, df_out_sample, 'sharpe'),
-#     (1e-4, 30000, df_in_sample, df_out_sample, 'sharpe'),
-#     (1e-4, 50000, df_in_sample, df_out_sample, 'sharpe'),
-#     (1e-4, 10000, df_in_sample, df_out_sample, 'sortino'),
-#     (1e-4, 30000, df_in_sample, df_out_sample, 'sortino'),
-#     (1e-4, 50000, df_in_sample, df_out_sample, 'sortino')
+#     (1e-3, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
+#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
+#     (1e-5, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
+#     (1e-3, EPOCHS, df_in_sample, df_out_sample, 'sortino'),
+#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sortino'),
+#     (1e-5, EPOCHS, df_in_sample, df_out_sample, 'sortino')
 # ]
+
+configs = [
+    (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
+    (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
+    (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
+    (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sortino'),
+    (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sortino'),
+    (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sortino')
+]
 
 results = Parallel(n_jobs=-2)(
     delayed(run)(

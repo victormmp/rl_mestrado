@@ -44,7 +44,7 @@ class DeepActorAgentLearner:
         self._actor = ConvolutionalActor(in_shape=(n_features, n_days), outputs=n_assets)
         self._optimizer = Adam(self._actor.parameters(), lr=learning_rate)
     
-    def _get_state(self, df: pd.DataFrame):
+    def get_state(self, df: pd.DataFrame):
         assets_cols = [c + '_logReturns' for c in self._assets] + ["VIX"]
         df_assets = df.loc[:, assets_cols]
         df_aug = df.drop(assets_cols, axis=1).iloc[-1, :]
@@ -94,7 +94,7 @@ class DeepActorAgentLearner:
             port_values = []
 
             first_state = sample_data.iloc[0:self._n_days, :]
-            df_assets, df_aug = self._get_state(first_state)
+            df_assets, df_aug = self.get_state(first_state)
             state = torch.tensor(df_assets.values).float()
             aug = torch.tensor(df_aug.values).float()
             weights = self._actor(state, aug)
@@ -104,7 +104,7 @@ class DeepActorAgentLearner:
             for i in range(self._n_days, sample_data.shape[0]):
 
                 df_next_state = sample_data.iloc[i  - self._n_days: i,:]
-                next_state, df_aug = self._get_state(df_next_state)
+                next_state, df_aug = self.get_state(df_next_state)
 
                 next_assets_returns = torch.tensor(
                     np.exp(next_state.iloc[-1,:][[c + '_logReturns' for c in self._assets]].values)
@@ -138,7 +138,7 @@ class DeepActorAgentLearner:
             
             port_value = torch.sum(torch.log(port_values + 1))
             values.append((epoch, np.exp(port_value.item())))
-            if sw_total.read() - last_log > dt.timedelta(seconds=3):
+            if sw_total.read() - last_log > dt.timedelta(seconds=10):
                 LOGGER.info(f"[{epoch + 1} / {epochs}] Value = {round(np.exp(port_value.item()), 5)} {sw.read()}")
                 last_log = sw_total.read()
             
@@ -161,12 +161,14 @@ class DeepActorAgentLearner:
 
         return model_path, result_df
     
-    def act(self, state: np.ndarray) -> np.ndarray:
+    def act(self, state: np.ndarray, aug: np.ndarray) -> np.ndarray:
         self._actor.eval()
         state = deepcopy(state)
+        aug = deepcopy(aug)
         with torch.no_grad():
             state = torch.tensor(state).float()
-            weights = self._actor(state)
+            aug = torch.tensor(aug).float()
+            weights = self._actor(state, aug)
         
         return weights.detach().numpy()
 
