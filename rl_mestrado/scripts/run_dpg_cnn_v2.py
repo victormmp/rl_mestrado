@@ -12,7 +12,7 @@ from rl_mestrado.tools.log import get_logger
 #=======================================================| VARIABLES
 
 DATA_PATH = os.path.join('silver', 'daily_feature_set.csv')
-NAME_SUFFIX = "dpg_daily_cnn__SPY_rf_tendencia"
+NAME_SUFFIX = "dpg_daily_cnn_v2_solo"
 ASSETS = ['SPY', 'TLT.O', 'XLK']
 MODEL_OUTPUT_PATH = os.path.join('results')
 BACKTEST_OUTPUT_PATH = os.path.join('results', 'backtest')
@@ -20,17 +20,19 @@ WEIGHTS_OUTPUT_PATH = os.path.join('results', 'weights')
 TRAIN_OUTPUT_PATH = os.path.join('results', 'portfolio_values')
 START_OUT_SAMPLE = '2015-01-05'
 END_OUT_SAMPLE = '2021-09-30'
+
 N_FEATURES = 14
 N_DAYS = 60
-EPOCHS = 30000
+EPOCHS = 100000
 TENDENCIA = True
+LEARNING_RATE = 1e-4
+METRIC = 'sortino'
 
 #=======================================================| TRAIN
 
 data = pd.read_csv(DATA_PATH, parse_dates=True, index_col=0)
 data = data.loc[(~data['TLT.O_logReturns'].isnull()) | (~data['TAIL.K_logReturns'].isnull())]
 data.fillna(0, inplace=True)
-print(data.columns)
 
 start_out_samp = pd.Timestamp(START_OUT_SAMPLE)
 end_out_samp = pd.Timestamp(END_OUT_SAMPLE)
@@ -60,7 +62,12 @@ def run(**kwargs):
     df_in_sample = deepcopy(kwargs.get('df_in_sample'))
     df_out_sample = deepcopy(kwargs.get('df_out_sample'))
 
-    df_in_sample['rf'] = df_in_sample['SPY_logReturns'].apply(np.exp)
+    # rf = df_in_sample['SPY_logReturns'].apply(np.exp)
+    # rf = np.mean(rf / rf.shift(1))
+    # df_in_sample.loc[:, 'rf'] = np.power(rf, 252) - 1
+    # print(f"Using annualized return of {df_in_sample['rf'].iloc[0]}")
+
+    df_in_sample.loc[:, 'rf'] = df_in_sample['SPY_logReturns'].apply(np.exp)
 
     agent  = DeepActorAgentLearner(
         learning_rate=learning_rate,
@@ -92,8 +99,10 @@ def run(**kwargs):
     df_out_sample = df_out_sample.drop(columns_to_drop, axis=1)
 
     first_state = df_out_sample.iloc[0:N_DAYS, :]
-    state = first_state.values
-    weights = agent.act(state)
+    df_assets, df_aug = agent.get_state(first_state)
+    state = df_assets.values
+    aug = df_aug.values
+    weights = agent.act(state, aug)
     weights_vec = []
 
     df_out_sample = df_out_sample.iloc[1:, :]
@@ -101,14 +110,17 @@ def run(**kwargs):
     for i in range(N_DAYS, df_out_sample.shape[0]):
 
         date = pd.Timestamp(df_out_sample.iloc[i, :].name)
-        next_state = df_out_sample.iloc[i - N_DAYS : i,:]
+
+        df_next_state = df_out_sample.iloc[i - N_DAYS : i,:]
+        next_state, df_aug = agent.get_state(df_next_state)
         next_assets_returns = next_state.iloc[-1,:][[c + '_logReturns' for c in ASSETS]].values
 
         port_value += np.log(np.dot(weights, np.exp(next_assets_returns)))
         backtest_df.append((date, np.exp(port_value)))
 
         state = next_state.values
-        weights = agent.act(state)
+        aug = df_aug.values
+        weights = agent.act(state, aug)
         weights_vec.append((date, *list(weights)))
 
     backtest_df = pd.DataFrame(backtest_df, columns=['date', agent._agent_name]).set_index('date')
@@ -124,41 +136,23 @@ def run(**kwargs):
 
     return backtest_df, train_df
 
-configs = [
-    (1e-3, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
-    (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
-    (1e-5, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
-    (1e-3, EPOCHS, df_in_sample, df_out_sample, 'sortino'),
-    (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sortino'),
-    (1e-5, EPOCHS, df_in_sample, df_out_sample, 'sortino')
-]
-
-# configs = [
-#     (1e-4, 10000, df_in_sample, df_out_sample, 'sharpe'),
-#     (1e-4, 30000, df_in_sample, df_out_sample, 'sharpe'),
-#     (1e-4, 50000, df_in_sample, df_out_sample, 'sharpe'),
-#     (1e-4, 10000, df_in_sample, df_out_sample, 'sortino'),
-#     (1e-4, 30000, df_in_sample, df_out_sample, 'sortino'),
-#     (1e-4, 50000, df_in_sample, df_out_sample, 'sortino')
-# ]
-
 results = run(
-            learning_rate=1e-4,
+            learning_rate=LEARNING_RATE,
             epochs=EPOCHS,
-            metric='sortino',
+            metric=METRIC,
             df_in_sample=df_in_sample,
             df_out_sample=df_out_sample
     )
 
-df_result_backtest, df_result_train = zip(*results)
+df_result_backtest, df_result_train = results
 
 print("\n\nFINISHED PARALLEL EXECUTION\n")
 result_path = os.path.join(TRAIN_OUTPUT_PATH, dt.datetime.now().strftime("%Y_%m_%d__%H_%M_%S")+f'_aggregated_{NAME_SUFFIX}.csv')
-pd.concat(df_result_train, axis=1).to_csv(result_path, index=True)
+df_result_train.to_csv(result_path, index=True)
 print(f"Train result saved at {result_path}")
 
 result_path = os.path.join(BACKTEST_OUTPUT_PATH, dt.datetime.now().strftime("%Y_%m_%d__%H_%M_%S")+f'_aggregated_{NAME_SUFFIX}.csv')
-pd.concat(df_result_backtest, axis=1).to_csv(result_path, index=True)
+df_result_backtest.to_csv(result_path, index=True)
 print(f"Backtest result saved at {result_path}")
 
 

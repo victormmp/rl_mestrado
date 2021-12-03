@@ -22,7 +22,7 @@ START_OUT_SAMPLE = '2015-01-05'
 END_OUT_SAMPLE = '2021-09-30'
 N_FEATURES = 14
 N_DAYS = 60
-EPOCHS = 30000
+EPOCHS = 100000
 TENDENCIA = True
 
 #=======================================================| TRAIN
@@ -60,7 +60,12 @@ def run(**kwargs):
     df_in_sample = deepcopy(kwargs.get('df_in_sample'))
     df_out_sample = deepcopy(kwargs.get('df_out_sample'))
 
-    df_in_sample['rf'] = df_in_sample['SPY_logReturns'].apply(np.exp)
+    # rf = df_in_sample['SPY_logReturns'].apply(np.exp)
+    # rf = np.mean(rf / rf.shift(1))
+    # df_in_sample.loc[:, 'rf'] = np.power(rf, 252) - 1
+    # print(f"Using annualized return of {df_in_sample['rf'].iloc[0]}")
+
+    df_in_sample.loc[:, 'rf'] = df_in_sample['SPY_logReturns'].apply(np.exp)
 
     agent  = DeepActorAgentLearner(
         learning_rate=learning_rate,
@@ -139,12 +144,12 @@ def run(**kwargs):
 # ]
 
 configs = [
-    (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
-    (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
-    (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
-    (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sortino'),
-    (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sortino'),
-    (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sortino')
+    (1e-6, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
+    (1e-6, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
+    (1e-6, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
+    (1e-6, EPOCHS, df_in_sample, df_out_sample, 'sortino'),
+    (1e-6, EPOCHS, df_in_sample, df_out_sample, 'sortino'),
+    (1e-6, EPOCHS, df_in_sample, df_out_sample, 'sortino')
 ]
 
 results = Parallel(n_jobs=-2)(

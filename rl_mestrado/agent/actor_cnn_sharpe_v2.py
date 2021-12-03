@@ -16,6 +16,9 @@ from torch.optim import Adam
 
 LOGGER = get_logger('q_learning')
 
+device = torch.device("cpu" if torch.cuda.is_available() else "cpu")
+LOGGER.info(f"Running model on {device.type} device")
+
 
 class DeepActorAgentLearner:
 
@@ -41,7 +44,7 @@ class DeepActorAgentLearner:
 
         self._rng = default_rng(seed=self._seed)
 
-        self._actor = ConvolutionalActor(in_shape=(n_features, n_days), outputs=n_assets)
+        self._actor = ConvolutionalActor(in_shape=(n_features, n_days), outputs=n_assets).to(device)
         self._optimizer = Adam(self._actor.parameters(), lr=learning_rate)
     
     def get_state(self, df: pd.DataFrame):
@@ -95,8 +98,8 @@ class DeepActorAgentLearner:
 
             first_state = sample_data.iloc[0:self._n_days, :]
             df_assets, df_aug = self.get_state(first_state)
-            state = torch.tensor(df_assets.values).float()
-            aug = torch.tensor(df_aug.values).float()
+            state = torch.tensor(df_assets.values).float().to(device)
+            aug = torch.tensor(df_aug.values).float().to(device)
             weights = self._actor(state, aug)
 
             sample_data = sample_data.iloc[1:, :]
@@ -108,14 +111,14 @@ class DeepActorAgentLearner:
 
                 next_assets_returns = torch.tensor(
                     np.exp(next_state.iloc[-1,:][[c + '_logReturns' for c in self._assets]].values)
-                ).float()
+                ).float().to(device)
                 
                 # Calculate the reward from the previous state
                 port_values.append(torch.dot(weights, next_assets_returns))
 
                 # Get the next action for this next state
-                state = torch.tensor(next_state.values).float()
-                aug = torch.tensor(df_aug.values).float()
+                state = torch.tensor(next_state.values).float().to(device)
+                aug = torch.tensor(df_aug.values).float().to(device)
                 weights = self._actor(state,aug)
             
             port_values = torch.stack(port_values) - 1
@@ -166,11 +169,11 @@ class DeepActorAgentLearner:
         state = deepcopy(state)
         aug = deepcopy(aug)
         with torch.no_grad():
-            state = torch.tensor(state).float()
-            aug = torch.tensor(aug).float()
+            state = torch.tensor(state).float().to(device)
+            aug = torch.tensor(aug).float().to(device)
             weights = self._actor(state, aug)
         
-        return weights.detach().numpy()
+        return weights.cpu().detach().numpy()
 
     def load(self, model_path: str, exclude_params: list = None):
 
@@ -193,7 +196,7 @@ class DeepActorAgentLearner:
         self.__dict__.update(agent_state)
 
         # Rebuilding models
-        self._actor: nn.Module = SimpleNetworkActor(features=self._n_features, outputs=self._n_assets)
+        self._actor: nn.Module = ConvolutionalActor(features=self._n_features, outputs=self._n_assets)
         self._optimizer = Adam(self._actor.parameters(), lr=self._learning_rate)
 
         # Load model states
