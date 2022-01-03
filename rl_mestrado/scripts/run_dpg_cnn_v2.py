@@ -34,6 +34,11 @@ data = pd.read_csv(DATA_PATH, parse_dates=True, index_col=0)
 data = data.loc[(~data['TLT.O_logReturns'].isnull()) | (~data['TAIL.K_logReturns'].isnull())]
 data.fillna(0, inplace=True)
 
+# from IPython import embed; embed()
+
+data = data.drop(['VIX'], axis=1)
+N_FEATURES -= 1
+
 start_out_samp = pd.Timestamp(START_OUT_SAMPLE)
 end_out_samp = pd.Timestamp(END_OUT_SAMPLE)
 
@@ -42,13 +47,13 @@ df_out_sample = data.loc[start_out_samp:end_out_samp, :]
 
 if TENDENCIA:
     print("Using 66-days cumsum for assets")
-    df_in_sample.loc[:, 'SPY_tend'] = df_in_sample[['SPY_logReturns']].rolling(66, min_periods=1).mean().apply(lambda x: np.exp(x) - 1)
-    df_in_sample.loc[:, 'XLK_tend'] = df_in_sample[['XLK_logReturns']].rolling(66, min_periods=1).mean().apply(lambda x: np.exp(x) - 1)
-    df_in_sample.loc[:, 'TLT.O_tend'] = df_in_sample[['TLT.O_logReturns']].rolling(66, min_periods=1).mean().apply(lambda x: np.exp(x) - 1)
+    df_in_sample.loc[:, 'SPY_tend'] = df_in_sample[['SPY_logReturns']].rolling(13, min_periods=1).mean().apply(lambda x: np.exp(x) - 1)
+    df_in_sample.loc[:, 'XLK_tend'] = df_in_sample[['XLK_logReturns']].rolling(13, min_periods=1).mean().apply(lambda x: np.exp(x) - 1)
+    df_in_sample.loc[:, 'TLT.O_tend'] = df_in_sample[['TLT.O_logReturns']].rolling(13, min_periods=1).mean().apply(lambda x: np.exp(x) - 1)
 
-    df_out_sample.loc[:, 'SPY_tend'] = df_out_sample[['SPY_logReturns']].rolling(66, min_periods=1).mean().apply(lambda x: np.exp(x) - 1)
-    df_out_sample.loc[:, 'XLK_tend'] = df_out_sample[['XLK_logReturns']].rolling(66, min_periods=1).mean().apply(lambda x: np.exp(x) - 1)
-    df_out_sample.loc[:, 'TLT.O_tend'] = df_out_sample[['TLT.O_logReturns']].rolling(66, min_periods=1).mean().apply(lambda x: np.exp(x) - 1)
+    df_out_sample.loc[:, 'SPY_tend'] = df_out_sample[['SPY_logReturns']].rolling(13, min_periods=1).mean().apply(lambda x: np.exp(x) - 1)
+    df_out_sample.loc[:, 'XLK_tend'] = df_out_sample[['XLK_logReturns']].rolling(13, min_periods=1).mean().apply(lambda x: np.exp(x) - 1)
+    df_out_sample.loc[:, 'TLT.O_tend'] = df_out_sample[['TLT.O_logReturns']].rolling(13, min_periods=1).mean().apply(lambda x: np.exp(x) - 1)
 
     N_FEATURES +=  3
 
@@ -58,6 +63,7 @@ def run(**kwargs):
     learning_rate = kwargs.get('learning_rate', 1e-3)
     n_epochs = kwargs.get('epochs', EPOCHS)
     n_days = kwargs.get('n_days', N_DAYS)
+    window_size = kwargs.get('window', 180)
     metric = kwargs.get('metric', 'sharpe')
     df_in_sample = deepcopy(kwargs.get('df_in_sample'))
     df_out_sample = deepcopy(kwargs.get('df_out_sample'))
@@ -67,7 +73,7 @@ def run(**kwargs):
     # df_in_sample.loc[:, 'rf'] = np.power(rf, 252) - 1
     # print(f"Using annualized return of {df_in_sample['rf'].iloc[0]}")
 
-    df_in_sample.loc[:, 'rf'] = df_in_sample['SPY_logReturns'].apply(np.exp)
+    # df_in_sample.loc[:, 'rf'] = df_in_sample['SPY_logReturns'].apply(np.exp)
 
     agent  = DeepActorAgentLearner(
         learning_rate=learning_rate,
@@ -83,9 +89,8 @@ def run(**kwargs):
         data=df_in_sample, 
         epochs=n_epochs, 
         result_output_path=MODEL_OUTPUT_PATH,
-        window_size=180,
-        metric=metric,
-        risk_free_asset_col='rf'
+        window_size=window_size,
+        metric=metric
     )
 
     #=======================================================| BACKTEST
@@ -141,7 +146,8 @@ results = run(
             epochs=EPOCHS,
             metric=METRIC,
             df_in_sample=df_in_sample,
-            df_out_sample=df_out_sample
+            df_out_sample=df_out_sample,
+            window=2
     )
 
 df_result_backtest, df_result_train = results

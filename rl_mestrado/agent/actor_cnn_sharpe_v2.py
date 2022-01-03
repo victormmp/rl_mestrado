@@ -48,18 +48,25 @@ class DeepActorAgentLearner:
         self._optimizer = Adam(self._actor.parameters(), lr=learning_rate)
     
     def get_state(self, df: pd.DataFrame):
-        assets_cols = [c + '_logReturns' for c in self._assets] + ["VIX"]
-        df_assets = df.loc[:, assets_cols]
+        try:
+            assets_cols = [c + '_logReturns' for c in self._assets] + ["VIX"]
+            df_assets = df.loc[:, assets_cols]
+        except KeyError:
+            assets_cols = [c + '_logReturns' for c in self._assets]
+            df_assets = df.loc[:, assets_cols]
+        
         df_aug = df.drop(assets_cols, axis=1).iloc[-1, :]
 
         return df_assets, df_aug
     
     def train(self, data: pd.DataFrame, epochs: int = 1000, window_size: int = 100, metric: str = 'sharpe',
-        result_output_path: str = '.', risk_free_asset_col: str = None):
+        result_output_path: str = '.', risk_free_asset_col: str = None, index: int = None):
 
-        LOGGER.info(f"Starting training with {epochs} epochs and {self._learning_rate} learning rate.")
-        LOGGER.info(f"Using {metric} as risk metric.")
-        LOGGER.info(f"Using {risk_free_asset_col if risk_free_asset_col else 'default (mean = 1)'} risk free asset.")
+        index = f"[{index}] " if index is not None else ""
+
+        LOGGER.info(f"{index}Starting training with {epochs} epochs and {self._learning_rate} learning rate.")
+        LOGGER.info(f"{index}Using {metric} as risk metric.")
+        LOGGER.info(f"{index}Using {risk_free_asset_col if risk_free_asset_col else 'default (mean = 1)'} risk free asset.")
 
         data = deepcopy(data)
 
@@ -104,7 +111,10 @@ class DeepActorAgentLearner:
 
             sample_data = sample_data.iloc[1:, :]
 
-            for i in range(self._n_days, sample_data.shape[0]):
+            for i in range(self._n_days, sample_data.shape[0]+1):
+
+                # if torch.isnan(weights).any().item():
+                #     from IPython import embed; embed()
 
                 df_next_state = sample_data.iloc[i  - self._n_days: i,:]
                 next_state, df_aug = self.get_state(df_next_state)
@@ -133,6 +143,9 @@ class DeepActorAgentLearner:
                     (torch.mean(port_values) - rf) / torch.std(downside_returns),
                     nan=-1, posinf=torch.mean(port_values).item()
                 )
+            elif metric.lower() == 'return':
+                loss = torch.log(port_values + 1)
+                loss =  - torch.sum(loss) / (window_size - 1)
             else:
                 raise ValueError(f'Metric {metric} invalid. Must be one of [sharpe, sortino].')
 
@@ -142,7 +155,7 @@ class DeepActorAgentLearner:
             port_value = torch.sum(torch.log(port_values + 1))
             values.append((epoch, np.exp(port_value.item())))
             if sw_total.read() - last_log > dt.timedelta(seconds=10):
-                LOGGER.info(f"[{epoch + 1} / {epochs}] Value = {round(np.exp(port_value.item()), 5)} {sw.read()}")
+                LOGGER.info(f"{index}[{epoch + 1} / {epochs}] Value = {round(np.exp(port_value.item()), 5)} {sw.read()}")
                 last_log = sw_total.read()
             
             risk_metric.append((epoch, -loss.item()))
@@ -151,16 +164,16 @@ class DeepActorAgentLearner:
         model_path = self.save(output_path=model_output_path, model_name=self._agent_name)
 
         values_output_path = os.path.join(result_output_path, 'portfolio_values', self._agent_name+'.csv')
-        LOGGER.info(f"Saving portfolio values as {values_output_path}")
+        LOGGER.info(f"{index}Saving portfolio values as {values_output_path}")
         result_df = pd.DataFrame(values,columns=['epoch', self._agent_name]).set_index('epoch')
         result_df.to_csv(values_output_path, index=True)
 
         sharpe_output_path = os.path.join(result_output_path, 'losses', 'dpg_sharpe', self._agent_name+'.csv')
-        LOGGER.info(f"Saving sharpe values as {sharpe_output_path}")
+        LOGGER.info(f"{index}Saving sharpe values as {sharpe_output_path}")
         result_df = pd.DataFrame(risk_metric,columns=['epoch', self._agent_name]).set_index('epoch')
         result_df.to_csv(sharpe_output_path, index=True)
 
-        LOGGER.info(f"Finished training with {epochs} epochs in {sw_total.read()}.")
+        LOGGER.info(f"{index}Finished training with {epochs} epochs in {sw_total.read()}.")
 
         return model_path, result_df
     

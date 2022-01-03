@@ -22,15 +22,18 @@ START_OUT_SAMPLE = '2015-01-05'
 END_OUT_SAMPLE = '2021-09-30'
 N_FEATURES = 14
 N_DAYS = 60
-EPOCHS = 100000
+EPOCHS = 300000
 TENDENCIA = True
 
 #=======================================================| TRAIN
 
 data = pd.read_csv(DATA_PATH, parse_dates=True, index_col=0)
 data = data.loc[(~data['TLT.O_logReturns'].isnull()) | (~data['TAIL.K_logReturns'].isnull())]
+
+data.drop(['VIX'], axis=1, inplace=True)
+N_FEATURES -= 1
+
 data.fillna(0, inplace=True)
-print(data.columns)
 
 start_out_samp = pd.Timestamp(START_OUT_SAMPLE)
 end_out_samp = pd.Timestamp(END_OUT_SAMPLE)
@@ -53,9 +56,12 @@ if TENDENCIA:
 
 def run(**kwargs):
 
+    index = kwargs.get('index', None)
+
     learning_rate = kwargs.get('learning_rate', 1e-3)
     n_epochs = kwargs.get('epochs', EPOCHS)
     n_days = kwargs.get('n_days', N_DAYS)
+    window_size = kwargs.get('window', 180)
     metric = kwargs.get('metric', 'sharpe')
     df_in_sample = deepcopy(kwargs.get('df_in_sample'))
     df_out_sample = deepcopy(kwargs.get('df_out_sample'))
@@ -65,7 +71,9 @@ def run(**kwargs):
     # df_in_sample.loc[:, 'rf'] = np.power(rf, 252) - 1
     # print(f"Using annualized return of {df_in_sample['rf'].iloc[0]}")
 
-    df_in_sample.loc[:, 'rf'] = df_in_sample['SPY_logReturns'].apply(np.exp)
+    # df_in_sample.loc[:, 'rf'] = df_in_sample['SPY_logReturns'].apply(np.exp)
+
+    name_suffix = f"lr_{learning_rate}_epoch_{n_epochs}_metric_{metric}_window_{window_size}{('_' + str(index)) if index is not None else ''}"
 
     agent  = DeepActorAgentLearner(
         learning_rate=learning_rate,
@@ -73,17 +81,17 @@ def run(**kwargs):
         n_features=N_FEATURES,
         n_assets=len(ASSETS),
         n_days=n_days,
-        name_suffix=f"daily_lr_{learning_rate}_epoch_{n_epochs}_metric_{metric}"
+        name_suffix=name_suffix
     )
 
 
     model_path, train_df = agent.train(
+        index = index,
         data=df_in_sample, 
         epochs=n_epochs, 
         result_output_path=MODEL_OUTPUT_PATH,
-        window_size=180,
-        metric=metric,
-        risk_free_asset_col='rf'
+        window_size=window_size,
+        metric=metric
     )
 
     #=======================================================| BACKTEST
@@ -144,23 +152,33 @@ def run(**kwargs):
 # ]
 
 configs = [
-    (1e-6, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
-    (1e-6, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
-    (1e-6, EPOCHS, df_in_sample, df_out_sample, 'sharpe'),
-    (1e-6, EPOCHS, df_in_sample, df_out_sample, 'sortino'),
-    (1e-6, EPOCHS, df_in_sample, df_out_sample, 'sortino'),
-    (1e-6, EPOCHS, df_in_sample, df_out_sample, 'sortino')
+    (1e-5, EPOCHS, df_in_sample, df_out_sample, 'sharpe', 180),
+    (1e-5, EPOCHS, df_in_sample, df_out_sample, 'sharpe', 180),
+    (1e-5, EPOCHS, df_in_sample, df_out_sample, 'sharpe', 180),
+    (1e-5, EPOCHS, df_in_sample, df_out_sample, 'sortino', 180),
+    (1e-5, EPOCHS, df_in_sample, df_out_sample, 'sortino', 180),
+    (1e-5, EPOCHS, df_in_sample, df_out_sample, 'sortino', 180)
 ]
+
+# configs = [
+#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 'return', 2),
+#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 'return', 8),
+#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sortino', 29),
+#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sortino', 61),
+#     (1e-4, EPOCHS, df_in_sample, df_out_sample, 'sortino', 180),
+# ]
 
 results = Parallel(n_jobs=-2)(
     delayed(run)(
+            index=i,
             learning_rate=lr,
             epochs=e,
             metric=m,
             df_in_sample=df_i,
-            df_out_sample=df_o
+            df_out_sample=df_o,
+            window=w
     )
-    for lr, e, df_i, df_o, m in configs
+    for i, (lr, e, df_i, df_o, m, w) in enumerate(configs)
 )
 
 df_result_backtest, df_result_train = zip(*results)
