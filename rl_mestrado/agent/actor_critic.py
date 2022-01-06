@@ -122,9 +122,12 @@ class ActorCriticAgentLearner:
             for date, row in sample_data.iterrows():
             
                 # Calculate the reward from the previous state
+                #s (t+1)
                 next_state = torch.tensor(row.values).float()
+                # a (t+1)
                 next_action = self._actor(next_state.clone())
 
+                # r (t) usando o a (t) que eu escolhi no estado  passado, s(t)
                 reward = torch.dot(action, torch.tensor(np.exp(row[[c + '_logReturns' for c in self._assets]].values)).float())
                 reward = torch.log(reward)
                 
