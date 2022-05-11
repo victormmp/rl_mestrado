@@ -1,6 +1,6 @@
 # RL_MESTRADO
 
-Codes used on Victor Magalhaes M.Sc. research.
+Code used on Victor Magalhaes M.Sc. research.
 
 This repository is still in development. Further improvements (at code and documentation) will be delivered with time.
 
