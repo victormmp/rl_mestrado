@@ -9,34 +9,36 @@ from joblib import Parallel, delayed
 from rl_mestrado.agent.actor_cnn_sharpe_v2 import DeepActorAgentLearner
 from rl_mestrado.tools.log import get_logger
 
-#=======================================================| VARIABLES
+# =======================================================| VARIABLES
 
-DATA_PATH = os.path.join('silver', 'daily_feature_set.csv')
+DATA_PATH = os.path.join("silver", "daily_feature_set.csv")
 NAME_SUFFIX = "dpg_daily_cnn_v2_solo"
-ASSETS = ['SPY', 'TLT.O', 'XLK']
-MODEL_OUTPUT_PATH = os.path.join('results')
-BACKTEST_OUTPUT_PATH = os.path.join('results', 'backtest')
-WEIGHTS_OUTPUT_PATH = os.path.join('results', 'weights')
-TRAIN_OUTPUT_PATH = os.path.join('results', 'portfolio_values')
-START_OUT_SAMPLE = '2015-01-05'
-END_OUT_SAMPLE = '2021-09-30'
+ASSETS = ["SPY", "TLT.O", "XLK"]
+MODEL_OUTPUT_PATH = os.path.join("results")
+BACKTEST_OUTPUT_PATH = os.path.join("results", "backtest")
+WEIGHTS_OUTPUT_PATH = os.path.join("results", "weights")
+TRAIN_OUTPUT_PATH = os.path.join("results", "portfolio_values")
+START_OUT_SAMPLE = "2015-01-05"
+END_OUT_SAMPLE = "2021-09-30"
 
 N_FEATURES = 14
 N_DAYS = 60
 EPOCHS = 100000
 TENDENCIA = True
 LEARNING_RATE = 1e-4
-METRIC = 'sortino'
+METRIC = "sortino"
 
-#=======================================================| TRAIN
+# =======================================================| TRAIN
 
 data = pd.read_csv(DATA_PATH, parse_dates=True, index_col=0)
-data = data.loc[(~data['TLT.O_logReturns'].isnull()) | (~data['TAIL.K_logReturns'].isnull())]
+data = data.loc[
+    (~data["TLT.O_logReturns"].isnull()) | (~data["TAIL.K_logReturns"].isnull())
+]
 data.fillna(0, inplace=True)
 
 # from IPython import embed; embed()
 
-data = data.drop(['VIX'], axis=1)
+data = data.drop(["VIX"], axis=1)
 N_FEATURES -= 1
 
 start_out_samp = pd.Timestamp(START_OUT_SAMPLE)
@@ -47,26 +49,56 @@ df_out_sample = data.loc[start_out_samp:end_out_samp, :]
 
 if TENDENCIA:
     print("Using 66-days cumsum for assets")
-    df_in_sample.loc[:, 'SPY_tend'] = df_in_sample[['SPY_logReturns']].rolling(13, min_periods=1).mean().apply(lambda x: np.exp(x) - 1)
-    df_in_sample.loc[:, 'XLK_tend'] = df_in_sample[['XLK_logReturns']].rolling(13, min_periods=1).mean().apply(lambda x: np.exp(x) - 1)
-    df_in_sample.loc[:, 'TLT.O_tend'] = df_in_sample[['TLT.O_logReturns']].rolling(13, min_periods=1).mean().apply(lambda x: np.exp(x) - 1)
+    df_in_sample.loc[:, "SPY_tend"] = (
+        df_in_sample[["SPY_logReturns"]]
+        .rolling(13, min_periods=1)
+        .mean()
+        .apply(lambda x: np.exp(x) - 1)
+    )
+    df_in_sample.loc[:, "XLK_tend"] = (
+        df_in_sample[["XLK_logReturns"]]
+        .rolling(13, min_periods=1)
+        .mean()
+        .apply(lambda x: np.exp(x) - 1)
+    )
+    df_in_sample.loc[:, "TLT.O_tend"] = (
+        df_in_sample[["TLT.O_logReturns"]]
+        .rolling(13, min_periods=1)
+        .mean()
+        .apply(lambda x: np.exp(x) - 1)
+    )
 
-    df_out_sample.loc[:, 'SPY_tend'] = df_out_sample[['SPY_logReturns']].rolling(13, min_periods=1).mean().apply(lambda x: np.exp(x) - 1)
-    df_out_sample.loc[:, 'XLK_tend'] = df_out_sample[['XLK_logReturns']].rolling(13, min_periods=1).mean().apply(lambda x: np.exp(x) - 1)
-    df_out_sample.loc[:, 'TLT.O_tend'] = df_out_sample[['TLT.O_logReturns']].rolling(13, min_periods=1).mean().apply(lambda x: np.exp(x) - 1)
+    df_out_sample.loc[:, "SPY_tend"] = (
+        df_out_sample[["SPY_logReturns"]]
+        .rolling(13, min_periods=1)
+        .mean()
+        .apply(lambda x: np.exp(x) - 1)
+    )
+    df_out_sample.loc[:, "XLK_tend"] = (
+        df_out_sample[["XLK_logReturns"]]
+        .rolling(13, min_periods=1)
+        .mean()
+        .apply(lambda x: np.exp(x) - 1)
+    )
+    df_out_sample.loc[:, "TLT.O_tend"] = (
+        df_out_sample[["TLT.O_logReturns"]]
+        .rolling(13, min_periods=1)
+        .mean()
+        .apply(lambda x: np.exp(x) - 1)
+    )
 
-    N_FEATURES +=  3
+    N_FEATURES += 3
 
 
 def run(**kwargs):
 
-    learning_rate = kwargs.get('learning_rate', 1e-3)
-    n_epochs = kwargs.get('epochs', EPOCHS)
-    n_days = kwargs.get('n_days', N_DAYS)
-    window_size = kwargs.get('window', 180)
-    metric = kwargs.get('metric', 'sharpe')
-    df_in_sample = deepcopy(kwargs.get('df_in_sample'))
-    df_out_sample = deepcopy(kwargs.get('df_out_sample'))
+    learning_rate = kwargs.get("learning_rate", 1e-3)
+    n_epochs = kwargs.get("epochs", EPOCHS)
+    n_days = kwargs.get("n_days", N_DAYS)
+    window_size = kwargs.get("window", 180)
+    metric = kwargs.get("metric", "sharpe")
+    df_in_sample = deepcopy(kwargs.get("df_in_sample"))
+    df_out_sample = deepcopy(kwargs.get("df_out_sample"))
 
     # rf = df_in_sample['SPY_logReturns'].apply(np.exp)
     # rf = np.mean(rf / rf.shift(1))
@@ -75,32 +107,30 @@ def run(**kwargs):
 
     # df_in_sample.loc[:, 'rf'] = df_in_sample['SPY_logReturns'].apply(np.exp)
 
-    agent  = DeepActorAgentLearner(
+    agent = DeepActorAgentLearner(
         learning_rate=learning_rate,
         assets=ASSETS,
         n_features=N_FEATURES,
         n_assets=len(ASSETS),
         n_days=n_days,
-        name_suffix=f"daily_lr_{learning_rate}_epoch_{n_epochs}_metric_{metric}"
+        name_suffix=f"daily_lr_{learning_rate}_epoch_{n_epochs}_metric_{metric}",
     )
-
 
     model_path, train_df = agent.train(
-        data=df_in_sample, 
-        epochs=n_epochs, 
+        data=df_in_sample,
+        epochs=n_epochs,
         result_output_path=MODEL_OUTPUT_PATH,
         window_size=window_size,
-        metric=metric
+        metric=metric,
     )
 
-    #=======================================================| BACKTEST
-    print('\n\n\n#====================| PERFORMING BACKTEST |')
-
+    # =======================================================| BACKTEST
+    print("\n\n\n#====================| PERFORMING BACKTEST |")
 
     port_value = 0.0
     backtest_df = []
 
-    columns_to_drop = [c for c in df_out_sample.columns if 'TAIL' in c]
+    columns_to_drop = [c for c in df_out_sample.columns if "TAIL" in c]
     df_out_sample = df_out_sample.drop(columns_to_drop, axis=1)
 
     first_state = df_out_sample.iloc[0:N_DAYS, :]
@@ -116,9 +146,11 @@ def run(**kwargs):
 
         date = pd.Timestamp(df_out_sample.iloc[i, :].name)
 
-        df_next_state = df_out_sample.iloc[i - N_DAYS : i,:]
+        df_next_state = df_out_sample.iloc[i - N_DAYS : i, :]
         next_state, df_aug = agent.get_state(df_next_state)
-        next_assets_returns = next_state.iloc[-1,:][[c + '_logReturns' for c in ASSETS]].values
+        next_assets_returns = next_state.iloc[-1, :][
+            [c + "_logReturns" for c in ASSETS]
+        ].values
 
         port_value += np.log(np.dot(weights, np.exp(next_assets_returns)))
         backtest_df.append((date, np.exp(port_value)))
@@ -128,37 +160,46 @@ def run(**kwargs):
         weights = agent.act(state, aug)
         weights_vec.append((date, *list(weights)))
 
-    backtest_df = pd.DataFrame(backtest_df, columns=['date', agent._agent_name]).set_index('date')
+    backtest_df = pd.DataFrame(
+        backtest_df, columns=["date", agent._agent_name]
+    ).set_index("date")
 
-    backtest_result_path = os.path.join(BACKTEST_OUTPUT_PATH, agent._agent_name+'.csv')
+    backtest_result_path = os.path.join(
+        BACKTEST_OUTPUT_PATH, agent._agent_name + ".csv"
+    )
     backtest_df.to_csv(backtest_result_path, index=True)
 
-    weights_df = pd.DataFrame(weights_vec, columns=['date']+ASSETS).set_index('date')
-    weights_result_path = os.path.join(WEIGHTS_OUTPUT_PATH, agent._agent_name+'.csv')
+    weights_df = pd.DataFrame(weights_vec, columns=["date"] + ASSETS).set_index("date")
+    weights_result_path = os.path.join(WEIGHTS_OUTPUT_PATH, agent._agent_name + ".csv")
     weights_df.to_csv(weights_result_path, index=True)
 
     print(f"Backtest result saved at {backtest_result_path}")
 
     return backtest_df, train_df
 
+
 results = run(
-            learning_rate=LEARNING_RATE,
-            epochs=EPOCHS,
-            metric=METRIC,
-            df_in_sample=df_in_sample,
-            df_out_sample=df_out_sample,
-            window=2
-    )
+    learning_rate=LEARNING_RATE,
+    epochs=EPOCHS,
+    metric=METRIC,
+    df_in_sample=df_in_sample,
+    df_out_sample=df_out_sample,
+    window=2,
+)
 
 df_result_backtest, df_result_train = results
 
 print("\n\nFINISHED PARALLEL EXECUTION\n")
-result_path = os.path.join(TRAIN_OUTPUT_PATH, dt.datetime.now().strftime("%Y_%m_%d__%H_%M_%S")+f'_aggregated_{NAME_SUFFIX}.csv')
+result_path = os.path.join(
+    TRAIN_OUTPUT_PATH,
+    dt.datetime.now().strftime("%Y_%m_%d__%H_%M_%S") + f"_aggregated_{NAME_SUFFIX}.csv",
+)
 df_result_train.to_csv(result_path, index=True)
 print(f"Train result saved at {result_path}")
 
-result_path = os.path.join(BACKTEST_OUTPUT_PATH, dt.datetime.now().strftime("%Y_%m_%d__%H_%M_%S")+f'_aggregated_{NAME_SUFFIX}.csv')
+result_path = os.path.join(
+    BACKTEST_OUTPUT_PATH,
+    dt.datetime.now().strftime("%Y_%m_%d__%H_%M_%S") + f"_aggregated_{NAME_SUFFIX}.csv",
+)
 df_result_backtest.to_csv(result_path, index=True)
 print(f"Backtest result saved at {result_path}")
-
-

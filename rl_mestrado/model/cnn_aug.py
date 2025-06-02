@@ -5,10 +5,7 @@ import torch.nn as nn
 class ConvolutionalActor(nn.Module):
 
     def __init__(
-        self,
-        in_shape: list = (17, 60),
-        n_aug_features: int = 12,
-        outputs: int = 3 
+        self, in_shape: list = (17, 60), n_aug_features: int = 12, outputs: int = 3
     ):
 
         super().__init__()
@@ -19,32 +16,40 @@ class ConvolutionalActor(nn.Module):
         # kernel_1 = (5, 1)
         # kernel_2 = (days - kernel_1[0] + 1, 1)
 
-        kernel_1 = (int(days/2), 1)
+        kernel_1 = (int(days / 2), 1)
         kernel_2 = (days - kernel_1[0] + 1, 1)
 
         out_c_1 = 1
         out_c_2 = 1
 
         in_linear_1 = (
-                (days - kernel_1[0] - kernel_2[0] + 2) 
-                * (features - kernel_1[1] - kernel_2[1] + 2)
-            ) * out_c_2
+            (days - kernel_1[0] - kernel_2[0] + 2)
+            * (features - kernel_1[1] - kernel_2[1] + 2)
+        ) * out_c_2
 
-        self.conv1      = nn.Conv2d(in_channels=in_channels, out_channels=out_c_1, kernel_size=kernel_1)
-        self.drop1      = nn.Dropout2d(p=0.5)
-        self.batch1     = nn.BatchNorm2d(num_features=self.conv1.out_channels)
-        self.relu1      = nn.LeakyReLU()
-        self.conv2      = nn.Conv2d(in_channels=self.conv1.out_channels, out_channels=out_c_2, kernel_size=kernel_2)
-        self.batch2     = nn.BatchNorm2d(num_features=self.conv2.out_channels)
-        self.drop2      = nn.Dropout2d(p=0.3)
-        self.relu2      = nn.LeakyReLU()
-        self.flat1      = nn.Flatten()
-        self.linear1    = nn.Linear(in_features=in_linear_1, out_features=64)
-        self.relu3      = nn.LeakyReLU()
-        self.linear2    = nn.Linear(in_features=self.linear1.out_features, out_features=32)
-        self.relu4      = nn.LeakyReLU()
-        self.output1    = nn.Linear(in_features=self.linear2.out_features, out_features=outputs)
-        self.softmax1   = nn.Softmax(dim=1)
+        self.conv1 = nn.Conv2d(
+            in_channels=in_channels, out_channels=out_c_1, kernel_size=kernel_1
+        )
+        self.drop1 = nn.Dropout2d(p=0.5)
+        self.batch1 = nn.BatchNorm2d(num_features=self.conv1.out_channels)
+        self.relu1 = nn.LeakyReLU()
+        self.conv2 = nn.Conv2d(
+            in_channels=self.conv1.out_channels,
+            out_channels=out_c_2,
+            kernel_size=kernel_2,
+        )
+        self.batch2 = nn.BatchNorm2d(num_features=self.conv2.out_channels)
+        self.drop2 = nn.Dropout2d(p=0.3)
+        self.relu2 = nn.LeakyReLU()
+        self.flat1 = nn.Flatten()
+        self.linear1 = nn.Linear(in_features=in_linear_1, out_features=64)
+        self.relu3 = nn.LeakyReLU()
+        self.linear2 = nn.Linear(in_features=self.linear1.out_features, out_features=32)
+        self.relu4 = nn.LeakyReLU()
+        self.output1 = nn.Linear(
+            in_features=self.linear2.out_features, out_features=outputs
+        )
+        self.softmax1 = nn.Softmax(dim=1)
 
     def forward(self, x, augmented_data):
         # Add batch and channel dimentions
@@ -76,20 +81,15 @@ class ConvolutionalActor(nn.Module):
 
 class SimpleNetworkCritic(nn.Module):
 
-    def __init__(
-        self,
-        features: int = 64,
-        outputs: int = 3 
-    ):
+    def __init__(self, features: int = 64, outputs: int = 3):
 
         super().__init__()
 
-        self.linear1    = nn.Linear(in_features=features, out_features=64)
-        self.relu1      = nn.ReLU()
-        self.linear2    = nn.Linear(in_features=64, out_features=32)
-        self.relu2      = nn.ReLU()
-        self.output1    = nn.Linear(in_features=32, out_features=outputs)
-
+        self.linear1 = nn.Linear(in_features=features, out_features=64)
+        self.relu1 = nn.ReLU()
+        self.linear2 = nn.Linear(in_features=64, out_features=32)
+        self.relu2 = nn.ReLU()
+        self.output1 = nn.Linear(in_features=32, out_features=outputs)
 
     def forward(self, state, action):
         dim = len(state.shape) - 1
